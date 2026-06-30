@@ -122,13 +122,15 @@ export async function readGitHubFacts(
       headers: buildGitHubHeaders(resolveToken(options)),
     });
 
+    const rawBody = await response.text();
+
     if (!response.ok) {
       return { facts: [] };
     }
 
     let profile: unknown;
     try {
-      profile = await response.json();
+      profile = JSON.parse(rawBody);
     } catch {
       return { facts: [] };
     }
