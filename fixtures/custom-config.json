@@ -1,0 +1,34 @@
+{
+  "fields": [
+    {
+      "path": "full_name",
+      "from": "full_name",
+      "type": "string",
+      "required": true,
+      "normalize": "none"
+    },
+    {
+      "path": "primary_email",
+      "from": "emails[0]",
+      "type": "string",
+      "required": false,
+      "normalize": "none"
+    },
+    {
+      "path": "phone",
+      "from": "phones[0]",
+      "type": "string",
+      "required": false,
+      "normalize": "E164"
+    },
+    {
+      "path": "skill_names",
+      "from": "skills[].name",
+      "type": "string[]",
+      "required": false,
+      "normalize": "canonical"
+    }
+  ],
+  "include_confidence": true,
+  "on_missing": "null"
+}
