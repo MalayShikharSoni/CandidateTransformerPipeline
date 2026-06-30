@@ -20,6 +20,8 @@ interface GitHubUserProfile {
   bio?: string | null;
   html_url?: string | null;
   blog?: string | null;
+  location?: string | null;
+  email?: string | null;
 }
 
 function nonEmpty(value: string | null | undefined): string | undefined {
@@ -94,6 +96,28 @@ function profileToFacts(profile: GitHubUserProfile, rowIndex: number): RawFact[]
       rawValue: blog,
       source: "github",
       sourceMethod: "github_field:blog",
+      rowIndex,
+    });
+  }
+
+  const location = nonEmpty(profile.location);
+  if (location !== undefined) {
+    facts.push({
+      field: "location.raw",
+      rawValue: location,
+      source: "github",
+      sourceMethod: "github_field:location",
+      rowIndex,
+    });
+  }
+
+  const email = nonEmpty(profile.email);
+  if (email !== undefined) {
+    facts.push({
+      field: "emails",
+      rawValue: email,
+      source: "github",
+      sourceMethod: "github_field:email",
       rowIndex,
     });
   }
