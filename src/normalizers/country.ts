@@ -7,6 +7,8 @@ const COUNTRY_ALIASES: Record<string, string> = {
   india: "IN",
   ind: "IN",
   in: "IN",
+  // Indian state -> country inference, context-specific
+  punjab: "IN",
   "united states": "US",
   "united states of america": "US",
   usa: "US",

@@ -14,6 +14,14 @@ function baseSchemaForType(type: FieldConfig["type"]): z.ZodTypeAny {
       return z.array(z.union([z.string(), z.null()]));
     case "number[]":
       return z.array(z.number());
+    case "object":
+      // Currently only location uses type: 'object' — if additional object-typed
+      // fields are added, extend this case rather than relying on a single hardcoded schema.
+      return z.object({
+        city: z.string().nullable(),
+        region: z.string().nullable(),
+        country: z.string().nullable(),
+      });
   }
 }
 
