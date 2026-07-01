@@ -21,5 +21,12 @@
   "not_found": {
     "message": "Not Found",
     "documentation_url": "https://docs.github.com/rest"
-  }
+  },
+  "full_profile_repos": [
+    { "name": "worwave", "language": "TypeScript" },
+    { "name": "farmeasy", "language": "TypeScript" },
+    { "name": "portfolio", "language": "JavaScript" },
+    { "name": "scripts", "language": "Python" },
+    { "name": "old-project", "language": null }
+  ]
 }

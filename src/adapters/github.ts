@@ -122,12 +122,68 @@ function profileToFacts(profile: GitHubUserProfile, rowIndex: number): RawFact[]
     });
   }
 
-  // Skills from public repo languages are not available on GET /users/{username}.
-  // Fetching languages requires GET /users/{username}/repos plus per-repo
-  // GET /repos/{owner}/{repo}/languages — an N+1 call pattern deferred here.
-  // GitHub-derived skills are omitted until a multi-request ingest path is added.
+  return facts;
+}
+
+interface GitHubRepo {
+  language?: string | null;
+}
+
+function reposToSkillFacts(repos: GitHubRepo[], rowIndex: number): RawFact[] {
+  const seen = new Set<string>();
+  const facts: RawFact[] = [];
+
+  for (const repo of repos) {
+    const language = nonEmpty(repo.language);
+    if (language === undefined || seen.has(language)) {
+      continue;
+    }
+
+    seen.add(language);
+    facts.push({
+      field: "skills",
+      rawValue: language,
+      source: "github",
+      sourceMethod: "github_field:repo_language",
+      rowIndex,
+    });
+  }
 
   return facts;
+}
+
+async function fetchRepoSkillFacts(
+  fetchFn: FetchFn,
+  username: string,
+  rowIndex: number,
+  headers: Record<string, string>,
+): Promise<RawFact[]> {
+  try {
+    const response = await fetchFn(
+      `${GITHUB_USER_API}/${username}/repos?per_page=10&sort=updated`,
+      { headers },
+    );
+    const rawBody = await response.text();
+
+    if (!response.ok) {
+      return [];
+    }
+
+    let repos: unknown;
+    try {
+      repos = JSON.parse(rawBody);
+    } catch {
+      return [];
+    }
+
+    if (!Array.isArray(repos)) {
+      return [];
+    }
+
+    return reposToSkillFacts(repos as GitHubRepo[], rowIndex);
+  } catch {
+    return [];
+  }
 }
 
 export async function readGitHubFacts(
@@ -140,10 +196,12 @@ export async function readGitHubFacts(
   }
 
   const fetchFn = options?.fetch ?? fetch;
+  const headers = buildGitHubHeaders(resolveToken(options));
+  const rowIndex = options?.callIndex ?? 0;
 
   try {
     const response = await fetchFn(`${GITHUB_USER_API}/${trimmedUsername}`, {
-      headers: buildGitHubHeaders(resolveToken(options)),
+      headers,
     });
 
     const rawBody = await response.text();
@@ -163,8 +221,16 @@ export async function readGitHubFacts(
       return { facts: [] };
     }
 
+    const profileFacts = profileToFacts(profile as GitHubUserProfile, rowIndex);
+    const skillFacts = await fetchRepoSkillFacts(
+      fetchFn,
+      trimmedUsername,
+      rowIndex,
+      headers,
+    );
+
     return {
-      facts: profileToFacts(profile as GitHubUserProfile, options?.callIndex ?? 0),
+      facts: [...profileFacts, ...skillFacts],
     };
   } catch {
     return { facts: [] };

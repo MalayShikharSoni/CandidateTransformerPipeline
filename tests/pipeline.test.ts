@@ -91,8 +91,13 @@ describe("pipeline edge cases", () => {
   it("sparse unstructured source: GitHub links.github merges with CSV fields", async () => {
     const { facts: csvFacts } = await readCsvFacts("fixtures/recruiter.csv");
     const malayCsv = csvFacts.filter((fact) => fact.rowIndex === 0);
-    const mockFetch = async () =>
-      new Response(JSON.stringify(fixtures.sparse_profile), { status: 200 });
+    const mockFetch = async (url: string | URL | Request) => {
+      const href = typeof url === "string" ? url : url instanceof Request ? url.url : url.href;
+      if (href.includes("/repos")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response(JSON.stringify(fixtures.sparse_profile), { status: 200 });
+    };
     const { facts: githubFacts } = await readGitHubFacts("rohanmehta", {
       fetch: mockFetch,
     });
