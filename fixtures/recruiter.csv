@@ -1,5 +1,5 @@
-name,email,phone,current_company,title
-Malay Shikhar Soni,malayshikhar2004@gmail.com,+91 98765 43210,Techvanto Academy,Backend Intern
-Aditi Rao,aditi.rao@example.com,9876543299,Acme Corp,Software Engineer
-Rohan Mehta,,123,Globex,Product Manager
-Priya Nair,priya.nair@example.com,+919812345678,,Data Analyst
+name,email,phone,current_company,title,github_username
+Malay Shikhar Soni,malayshikhar2004@gmail.com,+91 98765 43210,Techvanto Academy,Backend Intern,malayshikharsoni
+Aditi Rao,aditi.rao@example.com,9876543299,Acme Corp,Software Engineer,
+Rohan Mehta,,123,Globex,Product Manager,
+Priya Nair,priya.nair@example.com,+919812345678,,Data Analyst,

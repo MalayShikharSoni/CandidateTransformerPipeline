@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { access, readFile } from "node:fs/promises";
+import pLimit from "p-limit";
 import { readCsvFacts } from "./adapters/csv.js";
 import { readGitHubFacts } from "./adapters/github.js";
 import { groupFactsByCandidate } from "./merge/group.js";
@@ -7,12 +8,18 @@ import { resolveCandidateGroup } from "./merge/resolve.js";
 import { normalizeFacts } from "./normalizers/index.js";
 import { projectCandidate } from "./projection/project.js";
 import { DEFAULT_CONFIG, ProjectionConfig } from "./schemas/config.js";
+import type { RawFact } from "./schemas/raw-fact.js";
 import { validateProjectedOutput } from "./validate/validate-output.js";
 
 interface CliArgs {
   csvPath: string;
-  githubUser: string;
+  githubUser?: string;
   configPath?: string;
+}
+
+interface FetchJob {
+  rowIndex: number;
+  username: string;
 }
 
 function exitWithError(message: string): never {
@@ -62,11 +69,87 @@ function parseArgs(argv: string[]): CliArgs {
     exitWithError("Error: --csv is required");
   }
 
-  if (githubUser === undefined) {
-    exitWithError("Error: --github is required");
+  return { csvPath, githubUser, configPath };
+}
+
+function bucketCsvFactsByRow(facts: RawFact[]): Map<number, RawFact[]> {
+  const buckets = new Map<number, RawFact[]>();
+
+  for (const fact of facts) {
+    if (fact.source !== "csv") {
+      continue;
+    }
+
+    const bucket = buckets.get(fact.rowIndex);
+    if (bucket === undefined) {
+      buckets.set(fact.rowIndex, [fact]);
+    } else {
+      bucket.push(fact);
+    }
   }
 
-  return { csvPath, githubUser, configPath };
+  return buckets;
+}
+
+function githubUsernameFromRow(rowFacts: RawFact[]): string | undefined {
+  for (const fact of rowFacts) {
+    if (fact.field !== "links.github_username") {
+      continue;
+    }
+
+    if (typeof fact.rawValue === "string") {
+      const trimmed = fact.rawValue.trim();
+      if (trimmed !== "") {
+        return trimmed;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function buildFetchJobs(
+  rowBuckets: Map<number, RawFact[]>,
+  globalGithubUser?: string,
+): FetchJob[] {
+  const jobs: FetchJob[] = [];
+
+  for (const [rowIndex, rowFacts] of rowBuckets) {
+    const username = globalGithubUser ?? githubUsernameFromRow(rowFacts);
+    if (username === undefined) {
+      continue;
+    }
+
+    jobs.push({ rowIndex, username });
+  }
+
+  return jobs;
+}
+
+async function fetchGitHubFactsForJobs(jobs: FetchJob[]): Promise<RawFact[]> {
+  const uniqueUsernames = [...new Set(jobs.map((job) => job.username))];
+  const limit = pLimit(10);
+  const factsByUsername = new Map<string, RawFact[]>();
+
+  await Promise.all(
+    uniqueUsernames.map((username) =>
+      limit(async () => {
+        const { facts } = await readGitHubFacts(username);
+        factsByUsername.set(username, facts);
+      }),
+    ),
+  );
+
+  const githubFacts: RawFact[] = [];
+
+  for (const { rowIndex, username } of jobs) {
+    const fetched = factsByUsername.get(username) ?? [];
+    for (const fact of fetched) {
+      githubFacts.push({ ...fact, rowIndex });
+    }
+  }
+
+  return githubFacts;
 }
 
 async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
@@ -113,7 +196,11 @@ async function main(): Promise<number> {
   await assertCsvReadable(args.csvPath);
 
   const { facts: csvFacts } = await readCsvFacts(args.csvPath);
-  const { facts: githubFacts } = await readGitHubFacts(args.githubUser);
+  const rowBuckets = bucketCsvFactsByRow(csvFacts);
+  const fetchJobs = buildFetchJobs(rowBuckets, args.githubUser);
+  const githubFacts =
+    fetchJobs.length > 0 ? await fetchGitHubFactsForJobs(fetchJobs) : [];
+
   const groups = groupFactsByCandidate(
     normalizeFacts([...csvFacts, ...githubFacts]),
   );

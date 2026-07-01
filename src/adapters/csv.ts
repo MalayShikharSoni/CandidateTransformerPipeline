@@ -3,7 +3,7 @@ import { access } from "node:fs/promises";
 import { parse } from "csv-parse";
 import type { RawFact } from "../schemas/raw-fact.js";
 
-const EXPECTED_COLUMNS = [
+const REQUIRED_COLUMNS = [
   "name",
   "email",
   "phone",
@@ -11,14 +11,17 @@ const EXPECTED_COLUMNS = [
   "title",
 ] as const;
 
-type CsvRow = Record<(typeof EXPECTED_COLUMNS)[number], string | undefined>;
+const OPTIONAL_COLUMNS = ["github_username"] as const;
+
+type CsvRow = Record<(typeof REQUIRED_COLUMNS)[number], string | undefined> &
+  Partial<Record<(typeof OPTIONAL_COLUMNS)[number], string | undefined>>;
 
 export interface CsvAdapterResult {
   facts: RawFact[];
 }
 
-function hasExpectedColumns(row: Record<string, unknown>): row is CsvRow {
-  return EXPECTED_COLUMNS.every((column) => column in row);
+function hasRequiredColumns(row: Record<string, unknown>): row is CsvRow {
+  return REQUIRED_COLUMNS.every((column) => column in row);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -84,6 +87,17 @@ function rowToFacts(row: CsvRow, rowIndex: number): RawFact[] {
     });
   }
 
+  const githubUsername = nonEmpty(row.github_username);
+  if (githubUsername !== undefined) {
+    facts.push({
+      field: "links.github_username",
+      rawValue: githubUsername,
+      source: "csv",
+      sourceMethod: "csv_column:github_username",
+      rowIndex,
+    });
+  }
+
   return facts;
 }
 
@@ -116,7 +130,7 @@ export async function readCsvFacts(filePath: string): Promise<CsvAdapterResult> 
       }
 
       if (!headerValidated) {
-        if (!hasExpectedColumns(record as Record<string, unknown>)) {
+        if (!hasRequiredColumns(record as Record<string, unknown>)) {
           return { facts: [] };
         }
         headerValidated = true;
