@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import pLimit from "p-limit";
 import { readCsvFacts } from "./adapters/csv.js";
 import { readGitHubFacts } from "./adapters/github.js";
@@ -15,6 +15,7 @@ interface CliArgs {
   csvPath: string;
   githubUser?: string;
   configPath?: string;
+  outputPath?: string;
 }
 
 interface FetchJob {
@@ -31,6 +32,7 @@ function parseArgs(argv: string[]): CliArgs {
   let csvPath: string | undefined;
   let githubUser: string | undefined;
   let configPath: string | undefined;
+  let outputPath: string | undefined;
 
   for (let index = 2; index < argv.length; index++) {
     const arg = argv[index];
@@ -62,6 +64,15 @@ function parseArgs(argv: string[]): CliArgs {
       continue;
     }
 
+    if (arg === "--output") {
+      const value = argv[++index];
+      if (value === undefined) {
+        exitWithError("Error: --output requires a path argument");
+      }
+      outputPath = value;
+      continue;
+    }
+
     exitWithError(`Error: unknown argument "${arg}"`);
   }
 
@@ -69,7 +80,7 @@ function parseArgs(argv: string[]): CliArgs {
     exitWithError("Error: --csv is required");
   }
 
-  return { csvPath, githubUser, configPath };
+  return { csvPath, githubUser, configPath, outputPath };
 }
 
 function bucketCsvFactsByRow(facts: RawFact[]): Map<number, RawFact[]> {
@@ -221,7 +232,19 @@ async function main(): Promise<number> {
     return validated.data;
   });
 
-  console.log(JSON.stringify(output, null, 2));
+  const json = JSON.stringify(output, null, 2);
+
+  if (args.outputPath !== undefined) {
+    try {
+      await writeFile(args.outputPath, `${json}\n`, "utf8");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      exitWithError(`Error: cannot write output file: ${message}`);
+    }
+  } else {
+    console.log(json);
+  }
+
   return 0;
 }
 
