@@ -4,6 +4,7 @@ import type {
   ProvenanceEntry,
   ProvenanceMethod,
 } from "../schemas/canonical.js";
+import { normalizeCountry } from "../normalizers/country.js";
 import type { NormalizedFact } from "../schemas/raw-fact.js";
 import type { CandidateFactGroup } from "./group.js";
 
@@ -472,6 +473,51 @@ function averageConfidence(scores: Array<number | null>): number {
   return populated.reduce((sum, score) => sum + score, 0) / populated.length;
 }
 
+function resolveLocation(facts: NormalizedFact[]): {
+  location: CanonicalCandidate["location"];
+  provenance: ProvenanceEntry | null;
+} {
+  const empty = { city: null, region: null, country: null };
+
+  const rawFact = facts.find(
+    (fact) =>
+      fact.field === "location.raw" &&
+      typeof fact.rawValue === "string" &&
+      fact.rawValue.trim() !== "",
+  );
+  if (rawFact === undefined) {
+    return { location: empty, provenance: null };
+  }
+
+  const raw = rawFact.rawValue.trim();
+  const lastComma = raw.lastIndexOf(",");
+
+  let location: CanonicalCandidate["location"];
+
+  if (lastComma !== -1) {
+    const cityPart = raw.slice(0, lastComma).trim();
+    const countryPart = raw.slice(lastComma + 1).trim();
+    location = {
+      city: cityPart === "" ? null : cityPart,
+      region: null,
+      country: normalizeCountry(countryPart),
+    };
+  } else {
+    const country = normalizeCountry(raw);
+    location =
+      country !== null
+        ? { city: null, region: null, country }
+        : { city: raw, region: null, country: null };
+  }
+
+  const populated = location.city !== null || location.country !== null;
+  const provenance = populated
+    ? { field: "location", source: rawFact.source, method: "direct" as const }
+    : null;
+
+  return { location, provenance };
+}
+
 export function resolveCandidateGroup(
   group: CandidateFactGroup,
 ): CanonicalCandidate {
@@ -485,6 +531,7 @@ export function resolveCandidateGroup(
   const phones = resolveArrayField(facts, "phones", matchKey);
   const skills = resolveArrayField(facts, "skills", matchKey);
   const experience = resolveExperience(facts, matchKey);
+  const { location, provenance: locationProvenance } = resolveLocation(facts);
 
   const provenance = [
     fullName.provenance,
@@ -495,6 +542,7 @@ export function resolveCandidateGroup(
     phones.provenance,
     skills.provenance,
     experience.provenance,
+    locationProvenance,
   ].filter((entry): entry is ProvenanceEntry => entry !== null);
 
   const overall_confidence = averageConfidence([
@@ -515,11 +563,7 @@ export function resolveCandidateGroup(
     full_name: fullName.value ?? "",
     emails: emails.values,
     phones: phones.values,
-    location: {
-      city: null,
-      region: null,
-      country: null,
-    },
+    location,
     links: {
       linkedin: null,
       github: githubLink.value,
