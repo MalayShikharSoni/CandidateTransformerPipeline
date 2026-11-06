@@ -1,8 +1,13 @@
 import "dotenv/config";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import pLimit from "p-limit";
 import { readCsvFacts } from "./adapters/csv.js";
-import { readGitHubFacts } from "./adapters/github.js";
+import {
+  RateLimitState,
+  readGitHubFacts,
+  resolveToken,
+  type SourceWarning,
+} from "./adapters/github.js";
 import { groupFactsByCandidate } from "./merge/group.js";
 import { resolveCandidateGroup } from "./merge/resolve.js";
 import { normalizeFacts } from "./normalizers/index.js";
@@ -16,16 +21,23 @@ interface CliArgs {
   githubUser?: string;
   configPath?: string;
   outputPath?: string;
+  strict: boolean;
 }
 
 interface FetchJob {
   rowIndex: number;
   username: string;
+  /** true when the username came from this row's github_username column, not --github. */
+  linkedFromRow: boolean;
 }
+
+/** Exit codes: 0 success, 1 setup error, 2 a source failed and --strict was set. */
+const EXIT_SETUP_ERROR = 1;
+const EXIT_SOURCE_WARNINGS = 2;
 
 function exitWithError(message: string): never {
   console.error(message);
-  process.exit(1);
+  process.exit(EXIT_SETUP_ERROR);
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -33,9 +45,15 @@ function parseArgs(argv: string[]): CliArgs {
   let githubUser: string | undefined;
   let configPath: string | undefined;
   let outputPath: string | undefined;
+  let strict = false;
 
   for (let index = 2; index < argv.length; index++) {
     const arg = argv[index];
+
+    if (arg === "--strict") {
+      strict = true;
+      continue;
+    }
 
     if (arg === "--csv") {
       const value = argv[++index];
@@ -80,7 +98,7 @@ function parseArgs(argv: string[]): CliArgs {
     exitWithError("Error: --csv is required");
   }
 
-  return { csvPath, githubUser, configPath, outputPath };
+  return { csvPath, githubUser, configPath, outputPath, strict };
 }
 
 function bucketCsvFactsByRow(facts: RawFact[]): Map<number, RawFact[]> {
@@ -131,36 +149,52 @@ function buildFetchJobs(
       continue;
     }
 
-    jobs.push({ rowIndex, username });
+    jobs.push({ rowIndex, username, linkedFromRow: globalGithubUser === undefined });
   }
 
   return jobs;
 }
 
-async function fetchGitHubFactsForJobs(jobs: FetchJob[]): Promise<RawFact[]> {
+async function fetchGitHubFactsForJobs(
+  jobs: FetchJob[],
+): Promise<{ facts: RawFact[]; warnings: SourceWarning[] }> {
   const uniqueUsernames = [...new Set(jobs.map((job) => job.username))];
+  // p-limit caps how many requests are in flight at once. The hourly budget
+  // is a separate limit, tracked by the shared RateLimitState.
   const limit = pLimit(10);
+  const rateLimit = new RateLimitState();
   const factsByUsername = new Map<string, RawFact[]>();
+  const warnings: SourceWarning[] = [];
 
   await Promise.all(
     uniqueUsernames.map((username) =>
       limit(async () => {
-        const { facts } = await readGitHubFacts(username);
-        factsByUsername.set(username, facts);
+        const result = await readGitHubFacts(username, { rateLimit });
+        factsByUsername.set(username, result.facts);
+        warnings.push(...result.warnings);
       }),
     ),
   );
 
   const githubFacts: RawFact[] = [];
 
-  for (const { rowIndex, username } of jobs) {
+  for (const { rowIndex, username, linkedFromRow } of jobs) {
     const fetched = factsByUsername.get(username) ?? [];
     for (const fact of fetched) {
-      githubFacts.push({ ...fact, rowIndex });
+      githubFacts.push({ ...fact, rowIndex, rowLinked: linkedFromRow });
     }
   }
 
-  return githubFacts;
+  // Sort so warning order doesn't depend on which request finished first.
+  warnings.sort((a, b) => a.username.localeCompare(b.username));
+
+  return { facts: githubFacts, warnings };
+}
+
+function printWarnings(warnings: SourceWarning[]): void {
+  for (const warning of warnings) {
+    console.error(`warning: ${warning.source} "${warning.username}": ${warning.message}`);
+  }
 }
 
 async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
@@ -192,25 +226,29 @@ async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
   return result.data;
 }
 
-async function assertCsvReadable(csvPath: string): Promise<void> {
-  try {
-    await access(csvPath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    exitWithError(`Error: cannot read CSV file: ${message}`);
-  }
-}
-
 async function main(): Promise<number> {
   const args = parseArgs(process.argv);
   const config = await loadConfig(args.configPath);
-  await assertCsvReadable(args.csvPath);
 
-  const { facts: csvFacts } = await readCsvFacts(args.csvPath);
+  const csvResult = await readCsvFacts(args.csvPath);
+  if (csvResult.error !== undefined) {
+    exitWithError(`Error: ${csvResult.error}`);
+  }
+  const csvFacts = csvResult.facts;
   const rowBuckets = bucketCsvFactsByRow(csvFacts);
   const fetchJobs = buildFetchJobs(rowBuckets, args.githubUser);
-  const githubFacts =
-    fetchJobs.length > 0 ? await fetchGitHubFactsForJobs(fetchJobs) : [];
+
+  if (fetchJobs.length > 0 && resolveToken() === undefined) {
+    console.error(
+      "note: no GITHUB_TOKEN set, so GitHub allows only 60 requests/hour (2 per candidate).",
+    );
+  }
+
+  const { facts: githubFacts, warnings } =
+    fetchJobs.length > 0
+      ? await fetchGitHubFactsForJobs(fetchJobs)
+      : { facts: [], warnings: [] };
+  printWarnings(warnings);
 
   const groups = groupFactsByCandidate(
     normalizeFacts([...csvFacts, ...githubFacts]),
@@ -243,6 +281,11 @@ async function main(): Promise<number> {
     }
   } else {
     console.log(json);
+  }
+
+  if (args.strict && warnings.length > 0) {
+    console.error(`--strict: ${warnings.length} source warning(s), exiting with code 2.`);
+    return EXIT_SOURCE_WARNINGS;
   }
 
   return 0;

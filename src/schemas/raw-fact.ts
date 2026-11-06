@@ -10,6 +10,9 @@ export const RawFact = z.object({
   source: z.enum(["csv", "github"]),
   sourceMethod: z.string(), // e.g. "csv_column:phone", "github_field:bio"
   rowIndex: z.number().int().nonnegative(), // source-local bundle id (CSV row index or GitHub call index)
+  // true when the CSV row itself named this GitHub username (github_username column).
+  // That link is explicit evidence, so merge trusts it even if the names differ.
+  rowLinked: z.boolean().optional(),
 });
 export type RawFact = z.infer<typeof RawFact>;
 

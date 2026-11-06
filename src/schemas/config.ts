@@ -7,7 +7,7 @@ import { z } from "zod";
 export const FieldConfig = z.object({
   path: z.string(), // output field name/path, e.g. "primary_email"
   from: z.string(), // canonical source path, e.g. "emails[0]" or "skills[].name"
-  type: z.enum(["string", "number", "boolean", "string[]", "number[]", "object"]),
+  type: z.enum(["string", "number", "boolean", "string[]", "number[]", "object", "object[]"]),
   required: z.boolean().optional().default(false),
   normalize: z.enum(["E164", "canonical", "none"]).optional().default("none"),
 });
@@ -31,9 +31,12 @@ export const DEFAULT_CONFIG: ProjectionConfig = {
     { path: "emails", from: "emails", type: "string[]", required: false, normalize: "none" },
     { path: "phones", from: "phones", type: "string[]", required: false, normalize: "none" },
     { path: "location", from: "location", type: "object", required: false, normalize: "none" },
+    { path: "links", from: "links", type: "object", required: false, normalize: "none" },
     { path: "headline", from: "headline", type: "string", required: false, normalize: "none" },
     { path: "years_experience", from: "years_experience", type: "number", required: false, normalize: "none" },
-    { path: "skills", from: "skills[].name", type: "string[]", required: false, normalize: "canonical" },
+    { path: "skills", from: "skills", type: "object[]", required: false, normalize: "none" },
+    { path: "experience", from: "experience", type: "object[]", required: false, normalize: "none" },
+    { path: "education", from: "education", type: "object[]", required: false, normalize: "none" },
   ],
   include_confidence: true,
   on_missing: "null",

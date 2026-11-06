@@ -244,14 +244,15 @@ function coerceToType(
       return { value, ok: true };
 
     case "object":
-      if (value === null || value === undefined) {
-        return { value, ok: false };
-      }
-      if (typeof value === "object" && !Array.isArray(value)) {
-        return { value, ok: true };
-      }
-      return { value, ok: false };
+      return { value, ok: isPlainObject(value) };
+
+    case "object[]":
+      return { value, ok: Array.isArray(value) && value.every(isPlainObject) };
   }
+}
+
+function isPlainObject(value: unknown): boolean {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function projectCandidate(

@@ -99,10 +99,24 @@ function provisionalBundles(facts: NormalizedFact[]): NormalizedFact[][] {
   return [...byKey.values()];
 }
 
+function isRowLinked(githubFacts: NormalizedFact[]): boolean {
+  return githubFacts.some((fact) => fact.rowLinked === true);
+}
+
 function canUnionCrossSource(
   csvFacts: NormalizedFact[],
   githubFacts: NormalizedFact[],
 ): boolean {
+  // The CSV row named this GitHub username itself, so the recruiter has already
+  // said they are the same person. A different display name ("Malay S.") or a
+  // second email is a conflict to record in provenance, not a reason to split
+  // one person into two records.
+  if (isRowLinked(githubFacts)) {
+    return true;
+  }
+
+  // Not linked by the row (e.g. one --github username applied to every row):
+  // only merge when nothing contradicts the CSV row.
   const csvKey = computeMatchKey(csvFacts);
   if (csvKey === null) {
     return false;
@@ -136,35 +150,30 @@ function unionCrossSource(bundles: NormalizedFact[][]): NormalizedFact[][] {
       bundle[0]?.source !== "github",
   );
 
-  const usedGithub = new Set<number>();
+  // GitHub facts carry the rowIndex of the CSV row they were fetched for, so
+  // each CSV row has at most one GitHub partner: look it up instead of
+  // comparing every CSV row with every GitHub bundle (O(n) instead of O(n²)).
+  const githubByRow = new Map<number, NormalizedFact[]>();
+  for (const bundle of githubBundles) {
+    githubByRow.set(bundle[0].rowIndex, bundle);
+  }
+
   const result: NormalizedFact[][] = [...otherBundles];
 
   for (const csvBundle of csvBundles) {
-    let matched = false;
+    const rowIndex = csvBundle[0].rowIndex;
+    const githubBundle = githubByRow.get(rowIndex);
 
-    for (let index = 0; index < githubBundles.length; index++) {
-      if (usedGithub.has(index)) {
-        continue;
-      }
-
-      if (canUnionCrossSource(csvBundle, githubBundles[index])) {
-        result.push([...csvBundle, ...githubBundles[index]]);
-        usedGithub.add(index);
-        matched = true;
-        break;
-      }
-    }
-
-    if (!matched) {
+    if (githubBundle !== undefined && canUnionCrossSource(csvBundle, githubBundle)) {
+      result.push([...csvBundle, ...githubBundle]);
+      githubByRow.delete(rowIndex);
+    } else {
       result.push(csvBundle);
     }
   }
 
-  for (let index = 0; index < githubBundles.length; index++) {
-    if (!usedGithub.has(index)) {
-      result.push(githubBundles[index]);
-    }
-  }
+  // GitHub data that matched no CSV row is still emitted, as its own record.
+  result.push(...githubByRow.values());
 
   return result;
 }
@@ -190,8 +199,13 @@ function candidateIdFromMatchKey(matchKey: string): string {
   return createHash("sha256").update(matchKey).digest("hex");
 }
 
+// The match key (and so candidate_id) comes from the CSV facts when there are
+// any. A merged-in GitHub email therefore can't change the id or make the key
+// ambiguous, and the same CSV row always gets the same id.
 function resolveMatchKey(facts: NormalizedFact[]): string {
-  return computeMatchKey(facts) ?? standaloneMatchKey(facts);
+  const csvFacts = facts.filter((fact) => fact.source === "csv");
+  const anchor = csvFacts.length > 0 ? csvFacts : facts;
+  return computeMatchKey(anchor) ?? standaloneMatchKey(anchor);
 }
 
 export function groupFactsByCandidate(

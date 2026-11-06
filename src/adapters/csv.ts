@@ -18,10 +18,16 @@ type CsvRow = Record<(typeof REQUIRED_COLUMNS)[number], string | undefined> &
 
 export interface CsvAdapterResult {
   facts: RawFact[];
+  /**
+   * Set when the CSV can't be used at all (missing file, missing columns,
+   * unparseable). The CSV is the run's main input, so the CLI treats this as a
+   * setup error instead of quietly printing [].
+   */
+  error?: string;
 }
 
-function hasRequiredColumns(row: Record<string, unknown>): row is CsvRow {
-  return REQUIRED_COLUMNS.every((column) => column in row);
+function missingColumns(row: Record<string, unknown>): string[] {
+  return REQUIRED_COLUMNS.filter((column) => !(column in row));
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -104,8 +110,9 @@ function rowToFacts(row: CsvRow, rowIndex: number): RawFact[] {
 export async function readCsvFacts(filePath: string): Promise<CsvAdapterResult> {
   try {
     await access(filePath);
-  } catch {
-    return { facts: [] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { facts: [], error: `cannot read CSV file: ${message}` };
   }
 
   try {
@@ -130,23 +137,24 @@ export async function readCsvFacts(filePath: string): Promise<CsvAdapterResult> 
       }
 
       if (!headerValidated) {
-        if (!hasRequiredColumns(record as Record<string, unknown>)) {
-          return { facts: [] };
+        const missing = missingColumns(record as Record<string, unknown>);
+        if (missing.length > 0) {
+          return {
+            facts: [],
+            error: `CSV is missing required column(s): ${missing.join(", ")}`,
+          };
         }
         headerValidated = true;
       }
 
-      try {
-        facts.push(...rowToFacts(record as CsvRow, rowIndex));
-        rowIndex++;
-      } catch {
-        continue;
-      }
+      facts.push(...rowToFacts(record as CsvRow, rowIndex));
+      rowIndex++;
     }
 
     return { facts };
-  } catch {
-    return { facts: [] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { facts: [], error: `cannot parse CSV file: ${message}` };
   }
 }
 

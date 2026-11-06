@@ -1,5 +1,5 @@
-// No pipeline caller yet — CSV and GitHub adapters do not populate location.country.
-// Utility for future location normalization to ISO-3166 alpha-2.
+// Country name/code -> ISO-3166 alpha-2. Called by resolveLocation in
+// merge/resolve.ts on the country part of the GitHub location string.
 
 const ISO_ALPHA2 = /^[A-Z]{2}$/;
 

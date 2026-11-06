@@ -3,6 +3,7 @@ import type {
   ExperienceEntry,
   ProvenanceEntry,
   ProvenanceMethod,
+  Skill,
 } from "../schemas/canonical.js";
 import { normalizeCountry } from "../normalizers/country.js";
 import type { NormalizedFact } from "../schemas/raw-fact.js";
@@ -379,6 +380,36 @@ export function resolveArrayField(
   };
 }
 
+// Each skill gets its own sources and confidence: "TypeScript" seen in both CSV
+// and GitHub should score higher than "Python" seen only in one GitHub repo.
+// Same scoring rule as every other field: best source score, +0.1 if both agree.
+export function resolveSkillEntries(
+  facts: NormalizedFact[],
+  orderedNames: string[],
+): Skill[] {
+  return orderedNames.map((name) => {
+    const matching = facts.filter((fact) => {
+      if (fact.field !== "skills") {
+        return false;
+      }
+      const candidate = toScalarCandidate(fact);
+      return candidate.eligible && candidate.value === name;
+    });
+
+    const sources = SOURCE_PRECEDENCE.filter((source) =>
+      matching.some((fact) => fact.source === source),
+    );
+    const bestScore = Math.max(0, ...matching.map((fact) => factScore(fact, fact.source)));
+    const agreementBonus = sources.length > 1 ? 0.1 : 0;
+
+    return {
+      name,
+      confidence: Math.min(1, bestScore + agreementBonus),
+      sources: [...sources],
+    };
+  });
+}
+
 function bundleKey(fact: NormalizedFact): string {
   return `${fact.source}:${fact.rowIndex}`;
 }
@@ -485,7 +516,8 @@ function resolveLocation(facts: NormalizedFact[]): {
       typeof fact.rawValue === "string" &&
       fact.rawValue.trim() !== "",
   );
-  if (rawFact === undefined) {
+  // find() does not narrow rawValue from unknown, so check the type again here.
+  if (rawFact === undefined || typeof rawFact.rawValue !== "string") {
     return { location: empty, provenance: null };
   }
 
@@ -572,11 +604,7 @@ export function resolveCandidateGroup(
     },
     headline: headline.value,
     years_experience: null,
-    skills: skills.values.map((name) => ({
-      name,
-      confidence: skills.confidence ?? 0,
-      sources: [skills.provenance?.source ?? "csv"],
-    })),
+    skills: resolveSkillEntries(facts, skills.values),
     experience: experience.entries,
     education: [],
     provenance,

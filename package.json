@@ -6,8 +6,10 @@
   "main": "dist/cli.js",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "tsx src/cli.ts",
     "test": "vitest run",
+    "check": "npm run typecheck && npm test",
     "test:watch": "vitest"
   },
   "dependencies": {

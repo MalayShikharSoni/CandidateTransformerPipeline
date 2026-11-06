@@ -1,9 +1,24 @@
 import { z } from "zod";
-import { ProvenanceEntry } from "../schemas/canonical.js";
+import { CanonicalCandidate, ProvenanceEntry } from "../schemas/canonical.js";
 import type { FieldConfig, ProjectionConfig } from "../schemas/config.js";
 
-function baseSchemaForType(type: FieldConfig["type"]): z.ZodTypeAny {
-  switch (type) {
+const TOP_LEVEL_FIELD = /^[a-zA-Z_]\w*$/;
+
+/**
+ * When a field is copied straight from a top-level canonical field
+ * (e.g. from: "links"), reuse that field's schema from the canonical model,
+ * so objects are checked key by key instead of just "is an object".
+ */
+function canonicalSchemaFor(from: string): z.ZodTypeAny | null {
+  if (!TOP_LEVEL_FIELD.test(from)) {
+    return null;
+  }
+  const shape = CanonicalCandidate.shape as Record<string, z.ZodTypeAny>;
+  return shape[from] ?? null;
+}
+
+function baseSchemaForType(field: FieldConfig): z.ZodTypeAny {
+  switch (field.type) {
     case "string":
       return z.string();
     case "number":
@@ -15,21 +30,19 @@ function baseSchemaForType(type: FieldConfig["type"]): z.ZodTypeAny {
     case "number[]":
       return z.array(z.number());
     case "object":
-      // Currently only location uses type: 'object' — if additional object-typed
-      // fields are added, extend this case rather than relying on a single hardcoded schema.
-      return z.object({
-        city: z.string().nullable(),
-        region: z.string().nullable(),
-        country: z.string().nullable(),
-      });
+      return canonicalSchemaFor(field.from) ?? z.record(z.string(), z.unknown());
+    case "object[]":
+      return (
+        canonicalSchemaFor(field.from) ?? z.array(z.record(z.string(), z.unknown()))
+      );
   }
 }
 
 function fieldSchema(
-  type: FieldConfig["type"],
+  field: FieldConfig,
   onMissing: ProjectionConfig["on_missing"],
 ): z.ZodTypeAny {
-  const base = baseSchemaForType(type);
+  const base = baseSchemaForType(field);
 
   if (onMissing === "omit") {
     return base.optional();
@@ -42,7 +55,7 @@ export function buildOutputSchema(config: ProjectionConfig): z.ZodObject<z.ZodRa
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const field of config.fields) {
-    shape[field.path] = fieldSchema(field.type, config.on_missing);
+    shape[field.path] = fieldSchema(field, config.on_missing);
   }
 
   if (config.include_confidence) {
