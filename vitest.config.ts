@@ -10,7 +10,7 @@ export default defineConfig({
       // exercised by running the CLI, not by unit tests.
       exclude: ["src/cli.ts"],
       reporter: ["text", "html", "lcov"],
-      // Fail the run if coverage drops below these (current: ~90% lines).
+      // Fail the run if coverage drops below these (current: ~94% lines, ~85% branches).
       thresholds: { lines: 85, statements: 85, functions: 85, branches: 80 },
     },
   },

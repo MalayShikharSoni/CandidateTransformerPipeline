@@ -11,7 +11,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -34,11 +34,11 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/node": "^22.5.0",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^9.39.5",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.72.1",
-    "vitest": "^2.0.5"
+    "vitest": "^5.1.0"
   }
 }

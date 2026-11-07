@@ -143,7 +143,7 @@ path, confidence on.
 ## Tests, linting and CI
 
 ```bash
-npm test            # 91 tests
+npm test            # 110 tests
 npm run coverage    # tests + coverage report (fails below 85% lines)
 npm run lint        # ESLint with type-aware rules
 npm run typecheck   # tsc over src, tests and scripts
@@ -151,7 +151,7 @@ npm run check       # all of the above, same as CI
 ```
 
 GitHub is always mocked through the adapter's injectable `fetch`, so tests
-never touch the network. Line coverage is about 90%.
+never touch the network. Coverage is about 94% of lines and 85% of branches.
 
 | File | What it covers |
 |---|---|
@@ -161,6 +161,7 @@ never touch the network. Line coverage is about 90%.
 | `tests/normalizers.test.ts` | Phone, date, country and skill normalizers, including inputs that must be rejected |
 | `tests/projection.test.ts` | Path parsing, renames, wildcards, `on_missing`, provenance filtering, output validation |
 | `tests/cache-and-log.test.ts` | ETag revalidation, cache files on disk, text and JSON log output |
+| `tests/edge-cases.test.ts` | Network errors, non-JSON and malformed GitHub responses, long rate-limit resets, one username shared across rows, unparseable CSV, duplicate emails, `name+company` matching, type coercion |
 
 **CI** (`.github/workflows/ci.yml`) runs on every push and pull request, on
 Ubuntu and Windows: lint, type-check, tests with coverage, build, then one real
