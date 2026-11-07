@@ -2,8 +2,10 @@
 
 [![CI](https://github.com/MalayShikharSoni/CandidateTransformerPipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MalayShikharSoni/CandidateTransformerPipeline/actions/workflows/ci.yml)
 
-**Eightfold Engineering Intern (Jul–Dec 2026) — Stage 2 submission**
 Malay Shikhar Soni · malayshikhar2004@gmail.com
+
+Problem statement: [`docs/problem-statement.md`](docs/problem-statement.md) ·
+Design: [`docs/design-doc.md`](docs/design-doc.md)
 
 ---
 

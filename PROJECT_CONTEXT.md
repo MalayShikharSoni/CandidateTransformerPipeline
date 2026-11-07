@@ -6,11 +6,10 @@ the deviation and asking first.
 
 ## What this is
 
-An Eightfold Engineering Intern (Jul-Dec 2026) take-home assignment. A CLI tool that
-ingests candidate data from two sources, merges it into one canonical profile per
-candidate, and projects it into a configurable output shape. Full spec lives in
-`docs/assignment-spec.md`. Design rationale lives in `docs/design-doc.md` — that PDF
-is the Stage 1 deliverable and reflects already-finalized decisions; this file
+A CLI tool that ingests candidate data from two sources, merges it into one canonical
+profile per candidate, and projects it into a configurable output shape. Full spec
+lives in `docs/problem-statement.md`. Design rationale lives in `docs/design-doc.md`
+(also `docs/design-doc.pdf`), which reflects already-finalized decisions; this file
 operationalizes it for implementation.
 
 ## Stack (fixed — do not suggest alternatives)
@@ -126,7 +125,7 @@ optionally a config JSON path, and it prints/writes the resulting JSON. Do not s
 time on polish here — flags, help text, and colored output are not graded. A clean,
 documented `npm run start -- --csv path --github username` is sufficient.
 
-## What "done" looks like for Stage 2
+## What "done" looks like
 
 - Runs end-to-end on sample inputs, producing schema-valid JSON for the default schema
   AND at least one custom config.

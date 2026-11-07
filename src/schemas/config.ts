@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Matches the assignment's example config shape exactly:
+// Matches the example config shape in docs/problem-statement.md:
 // { "fields": [{ "path": "...", "from": "...", "type": "...", "normalize": "...", "required": bool }],
 //   "include_confidence": bool, "on_missing": "null" | "omit" | "error" }
 

@@ -1,7 +1,7 @@
 {
   "name": "candidate-data-transformer",
   "version": "1.0.0",
-  "description": "Multi-source candidate data transformer — Eightfold Engineering Intern assignment",
+  "description": "CLI that merges recruiter CSV and GitHub data into one canonical, provenance-tracked profile per candidate",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
