@@ -1,6 +1,6 @@
 # Multi-Source Candidate Data Transformer
 
-[![CI](https://github.com/MalayShikharSoni/malay-eightfold-transformer/actions/workflows/ci.yml/badge.svg)](https://github.com/MalayShikharSoni/malay-eightfold-transformer/actions/workflows/ci.yml)
+[![CI](https://github.com/MalayShikharSoni/CandidateTransformerPipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MalayShikharSoni/CandidateTransformerPipeline/actions/workflows/ci.yml)
 
 **Eightfold Engineering Intern (Jul–Dec 2026) — Stage 2 submission**
 Malay Shikhar Soni · malayshikhar2004@gmail.com
