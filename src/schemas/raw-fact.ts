@@ -19,6 +19,6 @@ export type RawFact = z.infer<typeof RawFact>;
 // Produced by the 'normalize' stage — a RawFact plus its normalized value (or null
 // if normalization failed) and whether normalization actually ran/succeeded.
 export interface NormalizedFact extends RawFact {
-  normalizedValue: unknown | null;
+  normalizedValue: unknown; // null when normalization failed
   normalizationSucceeded: boolean;
 }

@@ -4,13 +4,25 @@
   "description": "Multi-source candidate data transformer — Eightfold Engineering Intern assignment",
   "type": "module",
   "main": "dist/cli.js",
+  "bin": {
+    "candidate-transformer": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
+    "lint": "eslint .",
     "start": "tsx src/cli.ts",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test",
-    "test:watch": "vitest"
+    "coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "check": "npm run lint && npm run typecheck && npm run coverage",
+    "benchmark": "tsx scripts/benchmark.ts"
   },
   "dependencies": {
     "csv-parse": "^5.5.6",
@@ -20,9 +32,13 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^22.5.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^9.39.5",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^2.0.5"
   }
 }

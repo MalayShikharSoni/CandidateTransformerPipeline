@@ -89,5 +89,5 @@ export function validateProjectedOutput(
     return { ok: false, error: formatZodError(result.error) };
   }
 
-  return { ok: true, data: result.data as Record<string, unknown> };
+  return { ok: true, data: result.data };
 }

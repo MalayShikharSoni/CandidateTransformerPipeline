@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -11,8 +11,9 @@ import { projectCandidate } from "../src/projection/project.js";
 import { DEFAULT_CONFIG } from "../src/schemas/config.js";
 import type { RawFact } from "../src/schemas/raw-fact.js";
 import { validateProjectedOutput } from "../src/validate/validate-output.js";
+import { githubFixtures, requestUrl } from "./helpers.js";
 
-const fixtures = JSON.parse(readFileSync("fixtures/github-responses.json", "utf8"));
+const fixtures = githubFixtures;
 
 function fact(
   field: string,
@@ -30,7 +31,7 @@ function jsonResponse(body: unknown, status = 200, headers: Record<string, strin
 /** Fake fetch: answers profile and repo URLs from the given handlers. */
 function fakeFetch(handlers: { profile: () => Response; repos?: () => Response }) {
   return vi.fn(async (url: string | URL | Request) => {
-    const href = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+    const href = requestUrl(url);
     if (href.includes("/repos")) {
       return handlers.repos?.() ?? jsonResponse([]);
     }
@@ -209,7 +210,7 @@ describe("default output schema", () => {
     const projected = projectCandidate(first, DEFAULT_CONFIG);
     expect(projected).not.toHaveProperty("error");
 
-    const validated = validateProjectedOutput(projected as Record<string, unknown>, DEFAULT_CONFIG);
+    const validated = validateProjectedOutput(projected, DEFAULT_CONFIG);
     expect(validated.ok).toBe(true);
     expect(projected).toHaveProperty("links");
     expect(projected).toHaveProperty("experience");

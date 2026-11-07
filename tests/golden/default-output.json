@@ -1,0 +1,268 @@
+[
+  {
+    "candidate_id": "fbc06e803f282378d5eab062f9519d9bb66129622ef57d694dedf73c3391538e",
+    "full_name": "Malay Shikhar Soni",
+    "emails": [
+      "malayshikhar2004@gmail.com"
+    ],
+    "phones": [
+      "+919876543210"
+    ],
+    "location": {
+      "city": "Delhi",
+      "region": null,
+      "country": "IN"
+    },
+    "links": {
+      "linkedin": null,
+      "github": "https://github.com/malayshikhar",
+      "portfolio": "https://malayshikhar.dev",
+      "other": []
+    },
+    "headline": "B.Tech CSE @ LPU | Backend dev, Node.js & TypeScript",
+    "years_experience": null,
+    "skills": [
+      {
+        "name": "TypeScript",
+        "confidence": 0.6,
+        "sources": [
+          "github"
+        ]
+      },
+      {
+        "name": "JavaScript",
+        "confidence": 0.6,
+        "sources": [
+          "github"
+        ]
+      },
+      {
+        "name": "Python",
+        "confidence": 0.6,
+        "sources": [
+          "github"
+        ]
+      }
+    ],
+    "experience": [
+      {
+        "company": "Techvanto Academy",
+        "title": "Backend Intern",
+        "start": null,
+        "end": null,
+        "summary": null
+      }
+    ],
+    "education": [],
+    "overall_confidence": 0.7625000000000001,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "headline",
+        "source": "github",
+        "method": "direct"
+      },
+      {
+        "field": "links.github",
+        "source": "github",
+        "method": "direct"
+      },
+      {
+        "field": "links.portfolio",
+        "source": "github",
+        "method": "direct"
+      },
+      {
+        "field": "emails",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "normalized"
+      },
+      {
+        "field": "skills",
+        "source": "github",
+        "method": "direct"
+      },
+      {
+        "field": "experience",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "location",
+        "source": "github",
+        "method": "direct"
+      }
+    ]
+  },
+  {
+    "candidate_id": "1bed43448405c19ff77df74d825707ac3b8e19345df9e8ec7fb47a73fc9168bd",
+    "full_name": "Aditi Rao",
+    "emails": [
+      "aditi.rao@example.com"
+    ],
+    "phones": [
+      "+919876543299"
+    ],
+    "location": {
+      "city": null,
+      "region": null,
+      "country": null
+    },
+    "links": {
+      "linkedin": null,
+      "github": null,
+      "portfolio": null,
+      "other": []
+    },
+    "headline": null,
+    "years_experience": null,
+    "skills": [],
+    "experience": [
+      {
+        "company": "Acme Corp",
+        "title": "Software Engineer",
+        "start": null,
+        "end": null,
+        "summary": null
+      }
+    ],
+    "education": [],
+    "overall_confidence": 0.9,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "emails",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "normalized"
+      },
+      {
+        "field": "experience",
+        "source": "csv",
+        "method": "direct"
+      }
+    ]
+  },
+  {
+    "candidate_id": "c17c637814b6f79a5d55d6513eeb8f49b1c5d0c913656940c0ac9ab8fcc3437f",
+    "full_name": "Rohan Mehta",
+    "emails": [],
+    "phones": [],
+    "location": {
+      "city": null,
+      "region": null,
+      "country": null
+    },
+    "links": {
+      "linkedin": null,
+      "github": null,
+      "portfolio": null,
+      "other": []
+    },
+    "headline": null,
+    "years_experience": null,
+    "skills": [],
+    "experience": [
+      {
+        "company": "Globex",
+        "title": "Product Manager",
+        "start": null,
+        "end": null,
+        "summary": null
+      }
+    ],
+    "education": [],
+    "overall_confidence": 0.9,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "fallback_match"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "normalization_failed"
+      },
+      {
+        "field": "experience",
+        "source": "csv",
+        "method": "fallback_match"
+      }
+    ]
+  },
+  {
+    "candidate_id": "350ea3240383ad66d73c504522ae8746bdfde2ae96c8378ecb92498f0143869a",
+    "full_name": "Priya Nair",
+    "emails": [
+      "priya.nair@example.com"
+    ],
+    "phones": [
+      "+919812345678"
+    ],
+    "location": {
+      "city": null,
+      "region": null,
+      "country": null
+    },
+    "links": {
+      "linkedin": null,
+      "github": null,
+      "portfolio": null,
+      "other": []
+    },
+    "headline": null,
+    "years_experience": null,
+    "skills": [],
+    "experience": [
+      {
+        "company": "",
+        "title": "Data Analyst",
+        "start": null,
+        "end": null,
+        "summary": null
+      }
+    ],
+    "education": [],
+    "overall_confidence": 0.9,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "emails",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "experience",
+        "source": "csv",
+        "method": "direct"
+      }
+    ]
+  }
+]

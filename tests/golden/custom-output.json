@@ -1,0 +1,102 @@
+[
+  {
+    "full_name": "Malay Shikhar Soni",
+    "primary_email": "malayshikhar2004@gmail.com",
+    "phone": "+919876543210",
+    "skill_names": [
+      "TypeScript",
+      "JavaScript",
+      "Python"
+    ],
+    "overall_confidence": 0.7625000000000001,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "emails",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "normalized"
+      },
+      {
+        "field": "skills",
+        "source": "github",
+        "method": "direct"
+      }
+    ]
+  },
+  {
+    "full_name": "Aditi Rao",
+    "primary_email": "aditi.rao@example.com",
+    "phone": "+919876543299",
+    "skill_names": [],
+    "overall_confidence": 0.9,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "emails",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "normalized"
+      }
+    ]
+  },
+  {
+    "full_name": "Rohan Mehta",
+    "primary_email": null,
+    "phone": null,
+    "skill_names": [],
+    "overall_confidence": 0.9,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "fallback_match"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "normalization_failed"
+      }
+    ]
+  },
+  {
+    "full_name": "Priya Nair",
+    "primary_email": "priya.nair@example.com",
+    "phone": "+919812345678",
+    "skill_names": [],
+    "overall_confidence": 0.9,
+    "provenance": [
+      {
+        "field": "full_name",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "emails",
+        "source": "csv",
+        "method": "direct"
+      },
+      {
+        "field": "phones",
+        "source": "csv",
+        "method": "direct"
+      }
+    ]
+  }
+]

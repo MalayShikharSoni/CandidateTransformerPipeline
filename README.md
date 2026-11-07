@@ -1,5 +1,7 @@
 # Multi-Source Candidate Data Transformer
 
+[![CI](https://github.com/MalayShikharSoni/malay-eightfold-transformer/actions/workflows/ci.yml/badge.svg)](https://github.com/MalayShikharSoni/malay-eightfold-transformer/actions/workflows/ci.yml)
+
 **Eightfold Engineering Intern (Jul–Dec 2026) — Stage 2 submission**
 Malay Shikhar Soni · malayshikhar2004@gmail.com
 
@@ -56,6 +58,27 @@ npx tsx src/cli.ts --csv fixtures/recruiter.csv --output output.json
 
 # Fail the run (exit code 2) if any GitHub call failed
 npx tsx src/cli.ts --csv fixtures/recruiter.csv --strict
+
+# One JSON object per line, with machine-readable logs on stderr
+npx tsx src/cli.ts --csv fixtures/recruiter.csv --format ndjson --log-format json
+
+# All options
+npx tsx src/cli.ts --help
+```
+
+**As an installed command** (compiled to `dist/`, exposed through the `bin` field):
+
+```bash
+npm run build
+npm link            # makes `candidate-transformer` available on your PATH
+candidate-transformer --csv fixtures/recruiter.csv
+```
+
+**With Docker** (no Node needed; mount the folder with your inputs at `/data`):
+
+```bash
+docker build -t candidate-transformer .
+docker run --rm -e GITHUB_TOKEN -v "$PWD:/data" candidate-transformer --csv fixtures/recruiter.csv
 ```
 
 **Arguments:**
@@ -65,13 +88,27 @@ npx tsx src/cli.ts --csv fixtures/recruiter.csv --strict
 | `--csv <path>` | Yes | Path to recruiter CSV |
 | `--github <username>` | No | GitHub username — applied to all rows. If omitted, each row uses its `github_username` column value |
 | `--config <path>` | No | Custom ProjectionConfig JSON. Defaults to full canonical schema |
-| `--output <path>` | No | Write JSON to file instead of stdout |
+| `--output <path>` | No | Write output to a file instead of stdout |
+| `--format <json\|ndjson>` | No | JSON array (default), or one record per line for tools like `jq` and bulk loaders |
 | `--strict` | No | Exit with code `2` if any source call failed (bad token, rate limit, unknown user) |
+| `--cache-dir <path>` | No | Where to keep the GitHub ETag cache (default `.cache/github`) |
+| `--no-cache` | No | Don't read or write the GitHub cache |
+| `--log-format <text\|json>` | No | stderr messages as text (default) or one JSON object per line |
+| `-h, --help` | No | Show all options |
 
-**Warnings:** when a GitHub call fails, the run still finishes without that
-source, but the reason goes to stderr, e.g.
-`warning: github "someone": GitHub rejected the token (HTTP 401). Check GITHUB_TOKEN in .env.`
-stdout stays pure JSON.
+**stderr vs stdout:** stdout carries only the output, so it can be piped
+straight into another program. Everything else goes to stderr: GitHub warnings
+(a failed call means the run finishes without that source, but says why) and
+a one-line summary:
+
+```
+warning: github "someone": GitHub rejected the token (HTTP 401). Check GITHUB_TOKEN in .env.
+summary: 4 CSV rows -> 4 candidates (0 errors) | GitHub: 1 username, 0 with warnings, 2 cache hits, 4998 requests left this hour | 261 ms
+```
+
+With `--log-format json`, the same lines are JSON objects
+(`{"level":"warn","event":"source_warning",...}`, `{"event":"run_summary",...}`)
+for CI logs or a log collector.
 
 **Exit codes:**
 
@@ -103,16 +140,32 @@ path, confidence on.
 
 ---
 
-## Running tests
+## Tests, linting and CI
 
 ```bash
-npm test
-# Verbose:
-npx vitest run --reporter=verbose
+npm test            # 91 tests
+npm run coverage    # tests + coverage report (fails below 85% lines)
+npm run lint        # ESLint with type-aware rules
+npm run typecheck   # tsc over src, tests and scripts
+npm run check       # all of the above, same as CI
 ```
 
-19 tests. GitHub is always mocked through the adapter's injectable `fetch`, so
-tests never touch the network.
+GitHub is always mocked through the adapter's injectable `fetch`, so tests
+never touch the network. Line coverage is about 90%.
+
+| File | What it covers |
+|---|---|
+| `tests/golden.test.ts` | Full pipeline on the sample inputs, compared with output files in `tests/golden/`. Any change to the output shows up as a diff in review. Also checks that two runs give identical output. After an intended change, regenerate with `npx vitest run -u`. |
+| `tests/pipeline.test.ts` | The five design-doc edge cases (below) |
+| `tests/fixes.test.ts` | Merge linking, per-skill scores, GitHub failure handling, CSV errors, default schema |
+| `tests/normalizers.test.ts` | Phone, date, country and skill normalizers, including inputs that must be rejected |
+| `tests/projection.test.ts` | Path parsing, renames, wildcards, `on_missing`, provenance filtering, output validation |
+| `tests/cache-and-log.test.ts` | ETag revalidation, cache files on disk, text and JSON log output |
+
+**CI** (`.github/workflows/ci.yml`) runs on every push and pull request, on
+Ubuntu and Windows: lint, type-check, tests with coverage, build, then one real
+end-to-end run of the built CLI against the GitHub API using the workflow's own
+token. A second job builds the Docker image and runs it on the sample CSV.
 
 `tests/pipeline.test.ts`, one per design-doc edge case:
 
@@ -122,19 +175,41 @@ tests never touch the network.
 4. **Sparse unstructured source** — GitHub contributes only what it has, no crash
 5. **Custom config `on_missing: "error"`** — missing required field returns `{ error }`
 
-`tests/fixes.test.ts`:
+---
 
-- **Merge:** a row-linked GitHub profile with a different display name and a
-  second email merges into one record, flags the conflict, and keeps the CSV
-  row's `candidate_id`. An unlinked mismatch stays separate. GitHub data only
-  pairs with the CSV row it was fetched for.
-- **Skills:** a skill seen in both sources scores higher than one seen in one source.
-- **GitHub failures:** 401, 404, retry after `Retry-After`, skipping calls once the
-  hourly budget is used up, keeping profile facts when only the repos call fails.
-- **CSV:** missing columns and missing files are reported as errors.
-- **Validation:** the default config passes, and an object with wrong key types fails.
+## Performance
 
-Type-check and test together with `npm run check`.
+`npm run benchmark` generates synthetic CSVs (seeded, so the data is the same
+every run: about 20% of rows with a GitHub username, 5% duplicate emails, 10%
+invalid phones) and runs the full pipeline on each. GitHub is mocked with
+instant responses, so this measures the pipeline itself, not the network.
+
+Node 22.13, Windows 11, x64 laptop:
+
+| CSV rows | GitHub users | Candidates out | Time | Rows/sec | Peak memory |
+|---:|---:|---:|---:|---:|---:|
+| 1,000 | 221 | 962 | 0.17 s | 5,929 | 112 MB |
+| 10,000 | 2,094 | 9,484 | 0.81 s | 12,301 | 144 MB |
+| 50,000 | 10,553 | 47,396 | 5.01 s | 9,971 | 306 MB |
+
+"Candidates out" is lower than rows because duplicate emails merge into one
+candidate. With a real GitHub API, the hourly budget is the limit, not the
+pipeline (see **ingest** below).
+
+---
+
+## GitHub response cache
+
+Each GitHub response is saved in `.cache/github/` together with its `ETag`.
+On the next run the request carries `If-None-Match`; if the profile hasn't
+changed, GitHub answers `304 Not Modified` with no body and the saved copy is
+used. Data is never stale, because every run still asks GitHub; it just doesn't
+download unchanged data again. With a token, GitHub doesn't count 304 responses
+against the hourly limit, so re-running a batch costs almost none of the budget.
+(Without a token, GitHub still counts them.) Cache files are written to a temp
+file and renamed, so an interrupted run never leaves a half-written file. A
+cache that can't be read or written is ignored, never fatal. Disable it with
+`--no-cache`.
 
 ---
 
@@ -145,7 +220,10 @@ ingest → extract → normalize → merge → confidence → project → valida
 ```
 
 Each stage is a pure function with typed inputs/outputs. No stage reaches into
-another's internals.
+another's internals. `src/pipeline.ts` (`runPipeline`) runs all stages and
+touches neither the console nor `process`. `src/cli.ts` only parses flags,
+prints, and sets the exit code, so the CLI, the tests and the benchmark all run
+the same code.
 
 - **ingest** — reads the CSV with a streaming parser and calls the GitHub REST
   API (profile + repo languages, 2 calls per candidate). A failed call produces
@@ -300,24 +378,30 @@ second, per-field override that conflicts with it.
   primary language only; full language breakdown would require N+1 calls per repo.
 - **`name+company` match key collision** — two candidates with identical name and
   company would merge incorrectly. Accepted at this scope; email is the safe key.
-- **Location parsing** — free-text GitHub location strings are parsed by splitting
-  on the last comma. "Punjab" maps to "IN" via a context-specific alias (Indian
-  candidate profiles). Ambiguous strings (e.g. "Punjab, Pakistan") would incorrectly
-  map to "IN" — documented and accepted for this scope.
+- **Location parsing** — free-text GitHub location strings are split on the last
+  comma: the part before is `city`, the part after is looked up as a country.
+  "Punjab" maps to "IN" via a context-specific alias (Indian candidate profiles),
+  so "Lahore, Punjab" (in Pakistan) would wrongly get `country: "IN"`. Region
+  names are used only as a country hint; `region` stays `null`. Documented and
+  accepted for this scope.
 - **`GITHUB_TOKEN` env var** — supports both `GITHUB_TOKEN` and `GH_TOKEN`
   (checked in that order). Without a token GitHub allows 60 req/hr, about 30
   candidates, and the CLI prints a note saying so. An expired token returns
   HTTP 401 and shows up as a warning.
 - **Memory** — the CSV is parsed as a stream, but all facts are kept in memory
-  until grouping, so memory grows with the number of rows. That's fine for
-  thousands of candidates. Constant-memory output (NDJSON) is a planned extension.
+  until grouping (two rows anywhere in the file can be the same person), so
+  memory grows with the number of rows: about 300 MB at 50,000 rows (see
+  **Performance**). `--format ndjson` changes the output format, not this.
 
 ---
 
 ## Stack
 
 Node.js + TypeScript · `zod` · `csv-parse` · `libphonenumber-js` · `p-limit` ·
-`vitest` · `dotenv` · native `fetch`
+`dotenv` · native `fetch`
+
+Dev: `vitest` + `@vitest/coverage-v8` · ESLint 9 + `typescript-eslint` ·
+GitHub Actions · Docker
 
 No LLM, no database, no server framework. Runs entirely in memory for a single
 CLI invocation.

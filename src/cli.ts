@@ -1,200 +1,101 @@
+#!/usr/bin/env node
 import "dotenv/config";
 import { readFile, writeFile } from "node:fs/promises";
-import pLimit from "p-limit";
-import { readCsvFacts } from "./adapters/csv.js";
-import {
-  RateLimitState,
-  readGitHubFacts,
-  resolveToken,
-  type SourceWarning,
-} from "./adapters/github.js";
-import { groupFactsByCandidate } from "./merge/group.js";
-import { resolveCandidateGroup } from "./merge/resolve.js";
-import { normalizeFacts } from "./normalizers/index.js";
-import { projectCandidate } from "./projection/project.js";
+import { parseArgs } from "node:util";
+import { FileResponseCache } from "./adapters/github-cache.js";
+import { resolveToken } from "./adapters/github.js";
+import { createLogger, type LogFormat, type Logger } from "./log.js";
+import { runPipeline, type OutputRecord } from "./pipeline.js";
 import { DEFAULT_CONFIG, ProjectionConfig } from "./schemas/config.js";
-import type { RawFact } from "./schemas/raw-fact.js";
-import { validateProjectedOutput } from "./validate/validate-output.js";
-
-interface CliArgs {
-  csvPath: string;
-  githubUser?: string;
-  configPath?: string;
-  outputPath?: string;
-  strict: boolean;
-}
-
-interface FetchJob {
-  rowIndex: number;
-  username: string;
-  /** true when the username came from this row's github_username column, not --github. */
-  linkedFromRow: boolean;
-}
 
 /** Exit codes: 0 success, 1 setup error, 2 a source failed and --strict was set. */
+const EXIT_OK = 0;
 const EXIT_SETUP_ERROR = 1;
 const EXIT_SOURCE_WARNINGS = 2;
 
-function exitWithError(message: string): never {
-  console.error(message);
-  process.exit(EXIT_SETUP_ERROR);
+const DEFAULT_CACHE_DIR = ".cache/github";
+
+const HELP = `Usage: candidate-transformer --csv <path> [options]
+
+Merge a recruiter CSV with GitHub profiles into one canonical JSON profile per candidate.
+
+Options:
+  --csv <path>          Recruiter CSV (required)
+  --github <username>   Use this GitHub username for every row
+                        (default: each row's github_username column)
+  --config <path>       ProjectionConfig JSON (default: full canonical schema)
+  --output <path>       Write output to a file instead of stdout
+  --format <json|ndjson>  JSON array (default) or one JSON object per line
+  --strict              Exit with code 2 if any GitHub call failed
+  --cache-dir <path>    Where to keep GitHub ETag cache (default: ${DEFAULT_CACHE_DIR})
+  --no-cache            Don't read or write the GitHub cache
+  --log-format <text|json>  Format of stderr messages (default: text)
+  -h, --help            Show this help
+
+Exit codes: 0 ok, 1 setup error, 2 --strict and a source failed.
+Set GITHUB_TOKEN (or GH_TOKEN) in the environment or .env for 5,000 GitHub requests/hour.`;
+
+type OutputFormat = "json" | "ndjson";
+
+interface CliArgs {
+  help: boolean;
+  csvPath?: string;
+  githubUser?: string;
+  configPath?: string;
+  outputPath?: string;
+  format: OutputFormat;
+  strict: boolean;
+  /** undefined when --no-cache is set */
+  cacheDir?: string;
+  logFormat: LogFormat;
 }
 
-function parseArgs(argv: string[]): CliArgs {
-  let csvPath: string | undefined;
-  let githubUser: string | undefined;
-  let configPath: string | undefined;
-  let outputPath: string | undefined;
-  let strict = false;
+/** A problem with how the CLI was called or set up; reported, then exit 1. */
+class SetupError extends Error {}
 
-  for (let index = 2; index < argv.length; index++) {
-    const arg = argv[index];
-
-    if (arg === "--strict") {
-      strict = true;
-      continue;
-    }
-
-    if (arg === "--csv") {
-      const value = argv[++index];
-      if (value === undefined) {
-        exitWithError("Error: --csv requires a path argument");
-      }
-      csvPath = value;
-      continue;
-    }
-
-    if (arg === "--github") {
-      const value = argv[++index];
-      if (value === undefined) {
-        exitWithError("Error: --github requires a username argument");
-      }
-      githubUser = value;
-      continue;
-    }
-
-    if (arg === "--config") {
-      const value = argv[++index];
-      if (value === undefined) {
-        exitWithError("Error: --config requires a path argument");
-      }
-      configPath = value;
-      continue;
-    }
-
-    if (arg === "--output") {
-      const value = argv[++index];
-      if (value === undefined) {
-        exitWithError("Error: --output requires a path argument");
-      }
-      outputPath = value;
-      continue;
-    }
-
-    exitWithError(`Error: unknown argument "${arg}"`);
+function oneOf<T extends string>(value: string, allowed: readonly T[], flag: string): T {
+  if ((allowed as readonly string[]).includes(value)) {
+    return value as T;
   }
-
-  if (csvPath === undefined) {
-    exitWithError("Error: --csv is required");
-  }
-
-  return { csvPath, githubUser, configPath, outputPath, strict };
+  throw new SetupError(`${flag} must be one of: ${allowed.join(", ")} (got "${value}")`);
 }
 
-function bucketCsvFactsByRow(facts: RawFact[]): Map<number, RawFact[]> {
-  const buckets = new Map<number, RawFact[]>();
-
-  for (const fact of facts) {
-    if (fact.source !== "csv") {
-      continue;
-    }
-
-    const bucket = buckets.get(fact.rowIndex);
-    if (bucket === undefined) {
-      buckets.set(fact.rowIndex, [fact]);
-    } else {
-      bucket.push(fact);
-    }
+function parseCliArgs(argv: string[]): CliArgs {
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      strict: true,
+      allowPositionals: false,
+      options: {
+        csv: { type: "string" },
+        github: { type: "string" },
+        config: { type: "string" },
+        output: { type: "string" },
+        format: { type: "string", default: "json" },
+        strict: { type: "boolean", default: false },
+        "cache-dir": { type: "string", default: DEFAULT_CACHE_DIR },
+        "no-cache": { type: "boolean", default: false },
+        "log-format": { type: "string", default: "text" },
+        help: { type: "boolean", short: "h", default: false },
+      },
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new SetupError(`${message}\nRun with --help to see the options.`);
   }
 
-  return buckets;
-}
-
-function githubUsernameFromRow(rowFacts: RawFact[]): string | undefined {
-  for (const fact of rowFacts) {
-    if (fact.field !== "links.github_username") {
-      continue;
-    }
-
-    if (typeof fact.rawValue === "string") {
-      const trimmed = fact.rawValue.trim();
-      if (trimmed !== "") {
-        return trimmed;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function buildFetchJobs(
-  rowBuckets: Map<number, RawFact[]>,
-  globalGithubUser?: string,
-): FetchJob[] {
-  const jobs: FetchJob[] = [];
-
-  for (const [rowIndex, rowFacts] of rowBuckets) {
-    const username = globalGithubUser ?? githubUsernameFromRow(rowFacts);
-    if (username === undefined) {
-      continue;
-    }
-
-    jobs.push({ rowIndex, username, linkedFromRow: globalGithubUser === undefined });
-  }
-
-  return jobs;
-}
-
-async function fetchGitHubFactsForJobs(
-  jobs: FetchJob[],
-): Promise<{ facts: RawFact[]; warnings: SourceWarning[] }> {
-  const uniqueUsernames = [...new Set(jobs.map((job) => job.username))];
-  // p-limit caps how many requests are in flight at once. The hourly budget
-  // is a separate limit, tracked by the shared RateLimitState.
-  const limit = pLimit(10);
-  const rateLimit = new RateLimitState();
-  const factsByUsername = new Map<string, RawFact[]>();
-  const warnings: SourceWarning[] = [];
-
-  await Promise.all(
-    uniqueUsernames.map((username) =>
-      limit(async () => {
-        const result = await readGitHubFacts(username, { rateLimit });
-        factsByUsername.set(username, result.facts);
-        warnings.push(...result.warnings);
-      }),
-    ),
-  );
-
-  const githubFacts: RawFact[] = [];
-
-  for (const { rowIndex, username, linkedFromRow } of jobs) {
-    const fetched = factsByUsername.get(username) ?? [];
-    for (const fact of fetched) {
-      githubFacts.push({ ...fact, rowIndex, rowLinked: linkedFromRow });
-    }
-  }
-
-  // Sort so warning order doesn't depend on which request finished first.
-  warnings.sort((a, b) => a.username.localeCompare(b.username));
-
-  return { facts: githubFacts, warnings };
-}
-
-function printWarnings(warnings: SourceWarning[]): void {
-  for (const warning of warnings) {
-    console.error(`warning: ${warning.source} "${warning.username}": ${warning.message}`);
-  }
+  return {
+    help: values.help,
+    csvPath: values.csv,
+    githubUser: values.github,
+    configPath: values.config,
+    outputPath: values.output,
+    format: oneOf(values.format, ["json", "ndjson"], "--format"),
+    strict: values.strict,
+    cacheDir: values["no-cache"] ? undefined : values["cache-dir"],
+    logFormat: oneOf(values["log-format"], ["text", "json"], "--log-format"),
+  };
 }
 
 async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
@@ -207,7 +108,7 @@ async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
     raw = await readFile(configPath, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    exitWithError(`Error: cannot read config file: ${message}`);
+    throw new SetupError(`cannot read config file: ${message}`);
   }
 
   let parsed: unknown;
@@ -215,88 +116,92 @@ async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
     parsed = JSON.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    exitWithError(`Error: config file is not valid JSON: ${message}`);
+    throw new SetupError(`config file is not valid JSON: ${message}`);
   }
 
   const result = ProjectionConfig.safeParse(parsed);
   if (!result.success) {
-    exitWithError(`Error: invalid ProjectionConfig: ${result.error.message}`);
+    throw new SetupError(`invalid ProjectionConfig: ${result.error.message}`);
   }
 
   return result.data;
 }
 
-async function main(): Promise<number> {
-  const args = parseArgs(process.argv);
-  const config = await loadConfig(args.configPath);
-
-  const csvResult = await readCsvFacts(args.csvPath);
-  if (csvResult.error !== undefined) {
-    exitWithError(`Error: ${csvResult.error}`);
+function formatOutput(records: OutputRecord[], format: OutputFormat): string {
+  if (format === "ndjson") {
+    return records.map((record) => `${JSON.stringify(record)}\n`).join("");
   }
-  const csvFacts = csvResult.facts;
-  const rowBuckets = bucketCsvFactsByRow(csvFacts);
-  const fetchJobs = buildFetchJobs(rowBuckets, args.githubUser);
-
-  if (fetchJobs.length > 0 && resolveToken() === undefined) {
-    console.error(
-      "note: no GITHUB_TOKEN set, so GitHub allows only 60 requests/hour (2 per candidate).",
-    );
-  }
-
-  const { facts: githubFacts, warnings } =
-    fetchJobs.length > 0
-      ? await fetchGitHubFactsForJobs(fetchJobs)
-      : { facts: [], warnings: [] };
-  printWarnings(warnings);
-
-  const groups = groupFactsByCandidate(
-    normalizeFacts([...csvFacts, ...githubFacts]),
-  );
-
-  const output = groups.map((group) => {
-    const canonical = resolveCandidateGroup(group);
-    const projected = projectCandidate(canonical, config);
-
-    if ("error" in projected) {
-      return { error: projected.error };
-    }
-
-    const validated = validateProjectedOutput(projected, config);
-    if (!validated.ok) {
-      return { error: validated.error };
-    }
-
-    return validated.data;
-  });
-
-  const json = JSON.stringify(output, null, 2);
-
-  if (args.outputPath !== undefined) {
-    try {
-      await writeFile(args.outputPath, `${json}\n`, "utf8");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      exitWithError(`Error: cannot write output file: ${message}`);
-    }
-  } else {
-    console.log(json);
-  }
-
-  if (args.strict && warnings.length > 0) {
-    console.error(`--strict: ${warnings.length} source warning(s), exiting with code 2.`);
-    return EXIT_SOURCE_WARNINGS;
-  }
-
-  return 0;
+  return `${JSON.stringify(records, null, 2)}\n`;
 }
 
-main()
-  .then((code) => {
-    process.exit(code);
-  })
-  .catch((error: unknown) => {
+async function writeOutput(text: string, outputPath?: string): Promise<void> {
+  if (outputPath === undefined) {
+    process.stdout.write(text);
+    return;
+  }
+  try {
+    await writeFile(outputPath, text, "utf8");
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`Error: unexpected failure: ${message}`);
-    process.exit(1);
+    throw new SetupError(`cannot write output file: ${message}`);
+  }
+}
+
+async function run(args: CliArgs, log: Logger): Promise<number> {
+  if (args.csvPath === undefined) {
+    throw new SetupError("--csv is required. Run with --help to see the options.");
+  }
+
+  const config = await loadConfig(args.configPath);
+  const started = performance.now();
+
+  const result = await runPipeline({
+    csvPath: args.csvPath,
+    config,
+    githubUser: args.githubUser,
+    cache: args.cacheDir === undefined ? undefined : new FileResponseCache(args.cacheDir),
   });
+  if (!result.ok) {
+    throw new SetupError(result.error);
+  }
+
+  if (result.stats.githubUsernames > 0 && resolveToken() === undefined) {
+    log.note("no GITHUB_TOKEN set, so GitHub allows only 60 requests/hour (2 per candidate).");
+  }
+  for (const warning of result.warnings) {
+    log.warning(warning);
+  }
+
+  await writeOutput(formatOutput(result.records, args.format), args.outputPath);
+  log.summary(result.stats, performance.now() - started);
+
+  if (args.strict && result.warnings.length > 0) {
+    log.error(`--strict: ${result.warnings.length} source warning(s), exiting with code 2.`);
+    return EXIT_SOURCE_WARNINGS;
+  }
+  return EXIT_OK;
+}
+
+async function main(): Promise<number> {
+  let log = createLogger("text");
+  try {
+    const args = parseCliArgs(process.argv.slice(2));
+    log = createLogger(args.logFormat);
+    if (args.help) {
+      process.stdout.write(`${HELP}\n`);
+      return EXIT_OK;
+    }
+    return await run(args, log);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.error(error instanceof SetupError ? message : `unexpected failure: ${message}`);
+    return EXIT_SETUP_ERROR;
+  }
+}
+
+// Set exitCode instead of calling process.exit(), so a large output piped to
+// another program is fully flushed before Node exits. main() catches its own
+// errors, so `void` here only marks that nothing awaits the top-level call.
+void main().then((code) => {
+  process.exitCode = code;
+});

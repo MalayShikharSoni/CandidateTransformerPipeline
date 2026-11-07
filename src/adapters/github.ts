@@ -1,4 +1,5 @@
 import type { RawFact } from "../schemas/raw-fact.js";
+import type { CachedResponse, ResponseCache } from "./github-cache.js";
 
 const GITHUB_USER_API = "https://api.github.com/users";
 
@@ -15,6 +16,8 @@ export interface SourceWarning {
 export interface GitHubAdapterResult {
   facts: RawFact[];
   warnings: SourceWarning[];
+  /** How many of this user's calls (0–2) GitHub answered with 304 Not Modified. */
+  cacheHits: number;
 }
 
 export type FetchFn = typeof fetch;
@@ -66,6 +69,8 @@ export interface ReadGitHubFactsOptions {
   rateLimit?: RateLimitState;
   /** Injected in tests so retries don't really wait. */
   sleep?: SleepFn;
+  /** Optional ETag cache; see github-cache.ts. */
+  cache?: ResponseCache;
 }
 
 interface GitHubUserProfile {
@@ -86,9 +91,12 @@ interface CallContext {
   headers: Record<string, string>;
   rateLimit: RateLimitState;
   sleep: SleepFn;
+  cache?: ResponseCache;
 }
 
-type CallResult = { ok: true; body: unknown } | { ok: false; reason: string };
+type CallResult =
+  | { ok: true; body: unknown; fromCache: boolean }
+  | { ok: false; reason: string };
 
 const defaultSleep: SleepFn = (ms) =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -175,9 +183,13 @@ function describeFailure(response: Response, rateLimit: RateLimitState): string 
 async function sendOnce(
   url: string,
   ctx: CallContext,
+  cached: CachedResponse | undefined,
 ): Promise<{ response: Response; body: string } | { error: string }> {
+  // With a cached copy, ask GitHub "only send it if it changed since this ETag".
+  const headers =
+    cached !== undefined ? { ...ctx.headers, "If-None-Match": cached.etag } : ctx.headers;
   try {
-    const response = await ctx.fetchFn(url, { headers: ctx.headers });
+    const response = await ctx.fetchFn(url, { headers });
     ctx.rateLimit.update(response.headers);
     const body = await response.text();
     return { response, body };
@@ -197,7 +209,9 @@ async function callGitHub(url: string, ctx: CallContext): Promise<CallResult> {
     };
   }
 
-  let attempt = await sendOnce(url, ctx);
+  const cached = await ctx.cache?.get(url);
+
+  let attempt = await sendOnce(url, ctx, cached);
   if ("error" in attempt) {
     return { ok: false, reason: attempt.error };
   }
@@ -205,21 +219,32 @@ async function callGitHub(url: string, ctx: CallContext): Promise<CallResult> {
   const waitMs = retryWaitMs(attempt.response);
   if (waitMs !== null && waitMs <= MAX_RETRY_WAIT_MS) {
     await ctx.sleep(waitMs);
-    attempt = await sendOnce(url, ctx);
+    attempt = await sendOnce(url, ctx, cached);
     if ("error" in attempt) {
       return { ok: false, reason: attempt.error };
     }
   }
 
-  if (!attempt.response.ok) {
+  // 304 Not Modified: our cached copy is still current.
+  const notModified = attempt.response.status === 304 && cached !== undefined;
+  if (!attempt.response.ok && !notModified) {
     return { ok: false, reason: describeFailure(attempt.response, ctx.rateLimit) };
   }
 
+  const bodyText = notModified ? cached.body : attempt.body;
+  let body: unknown;
   try {
-    return { ok: true, body: JSON.parse(attempt.body) };
+    body = JSON.parse(bodyText);
   } catch {
     return { ok: false, reason: "GitHub response was not valid JSON." };
   }
+
+  const etag = attempt.response.headers.get("etag");
+  if (!notModified && etag !== null && ctx.cache !== undefined) {
+    await ctx.cache.set(url, { etag, body: bodyText });
+  }
+
+  return { ok: true, body, fromCache: notModified };
 }
 
 function profileToFacts(profile: GitHubUserProfile, rowIndex: number): RawFact[] {
@@ -280,7 +305,7 @@ export async function readGitHubFacts(
 ): Promise<GitHubAdapterResult> {
   const trimmedUsername = username.trim();
   if (trimmedUsername === "") {
-    return { facts: [], warnings: [] };
+    return { facts: [], warnings: [], cacheHits: 0 };
   }
 
   const ctx: CallContext = {
@@ -288,6 +313,7 @@ export async function readGitHubFacts(
     headers: buildGitHubHeaders(resolveToken(options)),
     rateLimit: options?.rateLimit ?? new RateLimitState(),
     sleep: options?.sleep ?? defaultSleep,
+    cache: options?.cache,
   };
   const rowIndex = options?.callIndex ?? 0;
   const userUrl = `${GITHUB_USER_API}/${encodeURIComponent(trimmedUsername)}`;
@@ -299,13 +325,20 @@ export async function readGitHubFacts(
 
   const profile = await callGitHub(userUrl, ctx);
   if (!profile.ok) {
-    return { facts: [], warnings: [warn(profile.reason)] };
+    return { facts: [], warnings: [warn(profile.reason)], cacheHits: 0 };
   }
   if (!profile.body || typeof profile.body !== "object") {
-    return { facts: [], warnings: [warn("GitHub profile response was not an object.")] };
+    return {
+      facts: [],
+      warnings: [warn("GitHub profile response was not an object.")],
+      cacheHits: 0,
+    };
   }
 
-  const profileFacts = profileToFacts(profile.body as GitHubUserProfile, rowIndex);
+  // Every GitHubUserProfile field is optional, so any object fits the type;
+  // profileToFacts still checks each value with nonEmpty().
+  const profileFacts = profileToFacts(profile.body, rowIndex);
+  const profileHits = profile.fromCache ? 1 : 0;
 
   // Skills are a bonus: if the repo call fails we keep the profile facts.
   const repos = await callGitHub(`${userUrl}/repos?per_page=10&sort=updated`, ctx);
@@ -313,17 +346,20 @@ export async function readGitHubFacts(
     return {
       facts: profileFacts,
       warnings: [warn(`Could not read repos for skills. ${repos.reason}`)],
+      cacheHits: profileHits,
     };
   }
   if (!Array.isArray(repos.body)) {
     return {
       facts: profileFacts,
       warnings: [warn("GitHub repos response was not a list.")],
+      cacheHits: profileHits,
     };
   }
 
   return {
     facts: [...profileFacts, ...reposToSkillFacts(repos.body as GitHubRepo[], rowIndex)],
     warnings: [],
+    cacheHits: profileHits + (repos.fromCache ? 1 : 0),
   };
 }

@@ -11,13 +11,15 @@ const REQUIRED_COLUMNS = [
   "title",
 ] as const;
 
-const OPTIONAL_COLUMNS = ["github_username"] as const;
+type OptionalColumn = "github_username";
 
 type CsvRow = Record<(typeof REQUIRED_COLUMNS)[number], string | undefined> &
-  Partial<Record<(typeof OPTIONAL_COLUMNS)[number], string | undefined>>;
+  Partial<Record<OptionalColumn, string | undefined>>;
 
 export interface CsvAdapterResult {
   facts: RawFact[];
+  /** Data rows read (header excluded). */
+  rowCount: number;
   /**
    * Set when the CSV can't be used at all (missing file, missing columns,
    * unparseable). The CSV is the run's main input, so the CLI treats this as a
@@ -112,7 +114,7 @@ export async function readCsvFacts(filePath: string): Promise<CsvAdapterResult> 
     await access(filePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { facts: [], error: `cannot read CSV file: ${message}` };
+    return { facts: [], rowCount: 0, error: `cannot read CSV file: ${message}` };
   }
 
   try {
@@ -141,6 +143,7 @@ export async function readCsvFacts(filePath: string): Promise<CsvAdapterResult> 
         if (missing.length > 0) {
           return {
             facts: [],
+            rowCount: 0,
             error: `CSV is missing required column(s): ${missing.join(", ")}`,
           };
         }
@@ -151,10 +154,10 @@ export async function readCsvFacts(filePath: string): Promise<CsvAdapterResult> 
       rowIndex++;
     }
 
-    return { facts };
+    return { facts, rowCount: rowIndex };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { facts: [], error: `cannot parse CSV file: ${message}` };
+    return { facts: [], rowCount: 0, error: `cannot parse CSV file: ${message}` };
   }
 }
 

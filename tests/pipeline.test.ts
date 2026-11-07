@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readCsvFacts } from "../src/adapters/csv.js";
 import { readGitHubFacts } from "../src/adapters/github.js";
@@ -8,10 +7,7 @@ import type { NormalizedFact } from "../src/schemas/raw-fact.js";
 import { normalizeFacts } from "../src/normalizers/index.js";
 import { projectCandidate } from "../src/projection/project.js";
 import type { CandidateFactGroup } from "../src/merge/group.js";
-
-const fixtures = JSON.parse(
-  readFileSync("fixtures/github-responses.json", "utf8"),
-);
+import { githubFixtures as fixtures, requestUrl } from "./helpers.js";
 
 describe("pipeline edge cases", () => {
   it("missing source entirely: CSV-only run produces valid canonical without throwing", async () => {
@@ -92,7 +88,7 @@ describe("pipeline edge cases", () => {
     const { facts: csvFacts } = await readCsvFacts("fixtures/recruiter.csv");
     const malayCsv = csvFacts.filter((fact) => fact.rowIndex === 0);
     const mockFetch = async (url: string | URL | Request) => {
-      const href = typeof url === "string" ? url : url instanceof Request ? url.url : url.href;
+      const href = requestUrl(url);
       if (href.includes("/repos")) {
         return new Response(JSON.stringify([]), { status: 200 });
       }
