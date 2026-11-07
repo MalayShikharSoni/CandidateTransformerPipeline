@@ -9,15 +9,15 @@ const TOP_LEVEL_FIELD = /^[a-zA-Z_]\w*$/;
  * (e.g. from: "links"), reuse that field's schema from the canonical model,
  * so objects are checked key by key instead of just "is an object".
  */
-function canonicalSchemaFor(from: string): z.ZodTypeAny | null {
+function canonicalSchemaFor(from: string): z.ZodType | null {
   if (!TOP_LEVEL_FIELD.test(from)) {
     return null;
   }
-  const shape = CanonicalCandidate.shape as Record<string, z.ZodTypeAny>;
+  const shape = CanonicalCandidate.shape as Record<string, z.ZodType>;
   return shape[from] ?? null;
 }
 
-function baseSchemaForType(field: FieldConfig): z.ZodTypeAny {
+function baseSchemaForType(field: FieldConfig): z.ZodType {
   switch (field.type) {
     case "string":
       return z.string();
@@ -41,7 +41,7 @@ function baseSchemaForType(field: FieldConfig): z.ZodTypeAny {
 function fieldSchema(
   field: FieldConfig,
   onMissing: ProjectionConfig["on_missing"],
-): z.ZodTypeAny {
+): z.ZodType {
   const base = baseSchemaForType(field);
 
   if (onMissing === "omit") {
@@ -51,8 +51,8 @@ function fieldSchema(
   return base.nullable();
 }
 
-export function buildOutputSchema(config: ProjectionConfig): z.ZodObject<z.ZodRawShape> {
-  const shape: Record<string, z.ZodTypeAny> = {};
+export function buildOutputSchema(config: ProjectionConfig): z.ZodObject {
+  const shape: Record<string, z.ZodType> = {};
 
   for (const field of config.fields) {
     shape[field.path] = fieldSchema(field, config.on_missing);
@@ -63,7 +63,7 @@ export function buildOutputSchema(config: ProjectionConfig): z.ZodObject<z.ZodRa
     shape.provenance = z.array(ProvenanceEntry);
   }
 
-  return z.object(shape).strict();
+  return z.strictObject(shape);
 }
 
 function formatZodError(error: z.ZodError): string {

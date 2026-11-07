@@ -2,6 +2,7 @@
 import "dotenv/config";
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
+import { z } from "zod";
 import { FileResponseCache } from "./adapters/github-cache.js";
 import { resolveToken } from "./adapters/github.js";
 import { createLogger, type LogFormat, type Logger } from "./log.js";
@@ -121,7 +122,7 @@ async function loadConfig(configPath?: string): Promise<ProjectionConfig> {
 
   const result = ProjectionConfig.safeParse(parsed);
   if (!result.success) {
-    throw new SetupError(`invalid ProjectionConfig: ${result.error.message}`);
+    throw new SetupError(`invalid ProjectionConfig:\n${z.prettifyError(result.error)}`);
   }
 
   return result.data;
