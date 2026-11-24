@@ -5,7 +5,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev
+# The CLI image only; the web app gets its own image in the deployment phase.
+RUN npm run build:cli && npm prune --omit=dev
 
 # Runtime stage: only the compiled CLI and production dependencies.
 FROM node:22-alpine

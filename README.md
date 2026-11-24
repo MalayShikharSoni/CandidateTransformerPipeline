@@ -1,4 +1,4 @@
-# Multi-Source Candidate Data Transformer
+# CanonVerge — Multi-Source Candidate Data Transformer
 
 [![CI](https://github.com/MalayShikharSoni/CandidateTransformerPipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MalayShikharSoni/CandidateTransformerPipeline/actions/workflows/ci.yml)
 
@@ -19,6 +19,50 @@ we are in it.
 The pipeline is deterministic: same inputs always produce the same output. Every
 field is traceable to a source and method. A missing or garbage source never crashes
 the run — it contributes zero facts and the rest of the pipeline continues.
+
+It runs as a CLI (below) or as a **web app** (next section).
+
+---
+
+## Web app
+
+A React + Vite front end over a small Hono API that runs the same `runPipeline`
+as the CLI. Three pages: a landing page with a live ASCII hero, a **workbench**
+(upload a CSV and resumes, watch the 8 stages run, download JSON/NDJSON) and a
+**profile** page per candidate (source map, experience timeline, every field
+with its source, method and confidence).
+
+```bash
+npm run dev          # API on :8787 + Vite on http://localhost:5173 (proxies /api)
+npm run dev:replay   # same, but LLM runs replay fixtures/resume-llm-responses.json (no key needed)
+npm run build        # CLI + server to dist/, pages to web/dist/
+npm start            # one Node process: pages + API on PORT (default 8787)
+```
+
+The workbench has a **load sample batch** link (the fixture CSV and four
+resumes, copied to `web/public/samples/`).
+
+| Env var | Effect |
+|---|---|
+| `ANTHROPIC_API_KEY` | Enables the LLM toggle. Without it, resumes are read with regex only and the UI says so. |
+| `GITHUB_TOKEN` / `GH_TOKEN` | 5,000 GitHub requests/hour instead of 60. |
+| `PORT` | Server port for `npm start` (`--port` overrides it). |
+| `CACHE_DIR` | Where GitHub ETags and LLM answers are cached (default `.cache`). |
+| `REPLAY_LLM=1` | Dev only: replay saved fixture answers instead of calling Claude (same as `--replay`). |
+
+**What the server keeps:** nothing. Each run's uploads go to a fresh temp
+folder that is deleted when the run ends; results stream back to the browser
+and live in that tab (sessionStorage). A CSV's `resume_path` is matched to
+uploaded files **by file name only**, so it can never point the server at
+other files. Limits: CSV ≤ 5 MB, ≤ 25 resumes of ≤ 10 MB, 50 MB per request.
+`/api/health` reports only *whether* keys are set, never their values.
+
+**API:** `GET /api/health`; `POST /api/runs` (multipart: `csv`, `resumes`,
+`options` JSON with `llm`, `asOf`, `githubUser`, `config`) answers with a
+`text/event-stream` of `stage`, `source`, `warning`, `log` events and a final
+`result` (records, stats, warnings, per-field confidences) or `error`.
+
+The Dockerfile still builds the CLI image; a web image comes with the deployment work.
 
 ---
 
@@ -169,10 +213,10 @@ path, confidence on.
 ## Tests, linting and CI
 
 ```bash
-npm test            # 164 tests
+npm test            # 197 tests (pipeline, server and web app)
 npm run coverage    # tests + coverage report (fails below 85% lines)
 npm run lint        # ESLint with type-aware rules
-npm run typecheck   # tsc over src, tests and scripts
+npm run typecheck   # tsc over src, tests and scripts, then over web/
 npm run check       # all of the above, same as CI
 ```
 
@@ -184,6 +228,9 @@ resume LLM through an injected extractor that replays
 |---|---|
 | `tests/golden.test.ts` | Full pipeline on the sample inputs, compared with output files in `tests/golden/`. Any change to the output shows up as a diff in review. Also checks that two runs give identical output. After an intended change, regenerate with `npx vitest run -u`. |
 | `tests/pipeline.test.ts` | The five design-doc edge cases (below) |
+| `tests/pipeline-events.test.ts` | Progress events in stage order, the upload-name resume resolver (including a path-traversal attempt), per-field confidences |
+| `tests/server.test.ts` | The API: health, a full streamed run, regex-only fallback, custom config, bad requests, 413 over the size limit, safe file names |
+| `web/src/**/*.test.ts(x)` | ASCII portrait, SSE parser (events split across chunks), CSV preview, the workbench run flow against a mocked stream, the profile page |
 | `tests/fixes.test.ts` | Merge linking, per-skill scores, GitHub failure handling, CSV errors, default schema |
 | `tests/normalizers.test.ts` | Phone, date, country and skill normalizers, including inputs that must be rejected |
 | `tests/projection.test.ts` | Path parsing, renames, wildcards, `on_missing`, provenance filtering, output validation |
@@ -457,8 +504,12 @@ second, per-field override that conflicts with it.
 Node.js + TypeScript · `zod` · `csv-parse` · `libphonenumber-js` · `p-limit` ·
 `dotenv` · native `fetch` · `unpdf` · `mammoth` · `@anthropic-ai/sdk`
 
-Dev: `vitest` + `@vitest/coverage-v8` · ESLint 9 + `typescript-eslint` ·
-`pdf-lib` + `docx` (fixture generation) · GitHub Actions · Docker
+Web: `hono` + `@hono/node-server` · React 19 · `react-router` · Vite ·
+self-hosted Space Grotesk, Inter Tight and JetBrains Mono
 
-One opt-in LLM call (resume extraction), no database, no server framework. Runs entirely in memory for a single
-CLI invocation.
+Dev: `vitest` + `@vitest/coverage-v8` · jsdom + Testing Library · ESLint 9 +
+`typescript-eslint` + `react-hooks` · `pdf-lib` + `docx` (fixture generation) ·
+`concurrently` · GitHub Actions · Docker
+
+One opt-in LLM call (resume extraction), no database, a stateless API. Each run
+happens entirely in memory.

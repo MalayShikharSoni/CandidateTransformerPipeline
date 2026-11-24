@@ -1,0 +1,144 @@
+/* Motion: subtle, and all of it off under prefers-reduced-motion. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.rise-2 {
+  animation-delay: 0.12s;
+}
+.rise-3 {
+  animation-delay: 0.24s;
+}
+.rise-4 {
+  animation-delay: 0.36s;
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+.flow {
+  animation: flow 2.2s linear infinite;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee 48s linear infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+.blink {
+  animation: blink 1.6s steps(2) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(0.82);
+  }
+}
+.pulse {
+  animation: pulse 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+.caret {
+  animation: caret 1s steps(2) infinite;
+}
+
+/* Hatched "busy" bar for the running stage. */
+@keyframes march {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 24px 0;
+  }
+}
+.busy {
+  background-image: repeating-linear-gradient(90deg, var(--signal) 0 6px, transparent 6px 12px);
+  animation: march 0.6s linear infinite;
+}
+
+/* Diagonal hatching; a 12px tile holds exactly two stripe periods, so sliding it loops seamlessly. */
+@keyframes hatch {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 12px 0;
+  }
+}
+.hatched {
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(45deg, rgba(17, 17, 17, 0.75) 0 1.5px, transparent 1.5px 8.485px);
+  background-size: 12px 12px;
+}
+
+/* Text hover effects (in the spirit of reactbits.dev) */
+.ltr {
+  display: inline-block;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.28s;
+}
+.ltr:hover {
+  transform: translateY(-10px) rotate(-5deg);
+  color: var(--signal-text);
+}
+.wave .wv {
+  display: inline-block;
+  font-weight: 200;
+  transition: font-weight 0.45s ease, transform 0.45s ease;
+}
+.wave:hover .wv {
+  font-weight: 620;
+  transform: translateY(-4px);
+}
+.spread {
+  transition: letter-spacing 0.45s ease, color 0.3s;
+}
+.spread:hover {
+  letter-spacing: 0.55em;
+  color: var(--signal-text);
+}
+.weigh {
+  transition: font-weight 0.35s ease;
+}
+.weigh:hover {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

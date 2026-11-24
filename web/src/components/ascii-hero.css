@@ -1,0 +1,123 @@
+.hero-fig {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+.hero-fig-box {
+  position: relative;
+  width: 100%;
+  max-width: 622px;
+  overflow: hidden;
+  border: 1px solid var(--ink);
+}
+.hero-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 620px;
+  height: 640px;
+  transform-origin: 0 0;
+  overflow: hidden;
+  cursor: crosshair;
+  background-color: var(--panel);
+  background-image: radial-gradient(rgba(17, 17, 17, 0.22) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+}
+.hero-ascii {
+  position: absolute;
+  left: 22px;
+  top: 44px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 11px;
+  letter-spacing: 0;
+  white-space: pre;
+  user-select: none;
+  color: var(--ink);
+}
+.hero-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.anno-fill,
+.anno-box {
+  position: absolute;
+  pointer-events: none;
+}
+.anno-fill {
+  background: var(--signal);
+}
+.anno-box {
+  border: 1px solid var(--signal);
+}
+.anno-label {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--signal-text);
+  background: var(--panel);
+  padding: 0 2px;
+  pointer-events: none;
+}
+.src-tag {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  background: var(--panel);
+  padding: 4px 6px;
+  border: 1px solid var(--ink);
+}
+.out-tag {
+  position: absolute;
+  right: 30px;
+  top: 46px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
+}
+.cross-h,
+.cross-v {
+  position: absolute;
+  pointer-events: none;
+}
+.cross-h {
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed rgba(10, 107, 64, 0.55);
+}
+.cross-v {
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(10, 107, 64, 0.55);
+}
+.cross-read {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--paper);
+  background: var(--ink);
+  padding: 2px 5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.fig-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}

@@ -1,0 +1,273 @@
+/* CanonVerge visual kit: a lab sheet, not a dashboard. */
+:root {
+  --paper: #e7e6e1;
+  --panel: #edece8;
+  --ink: #111111;
+  --muted: #55544f;
+  --body: #2a2a27;
+  --signal: #13d17c;
+  --signal-text: #0a6b40;
+  --ember: #ff4d1a;
+  --ember-text: #b3330b;
+  --rule: rgba(17, 17, 17, 0.2);
+  --rule-soft: rgba(17, 17, 17, 0.15);
+
+  --font-display: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
+  --font-thin: "Inter Tight Variable", "Inter Tight", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Box-drawing art (┌─┐ ▓ ▇): the self-hosted JetBrains Mono subsets don't
+     include these, and mixing in a fallback font breaks the alignment, so the
+     art uses one system monospace that has them all. */
+  --font-glyph: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+
+  --gutter: clamp(16px, 3vw, 40px);
+  --max: 1440px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-thin);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The faint graph-paper grid behind every page. */
+.page {
+  min-height: 100vh;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.055) 1px, transparent 1px);
+  background-size: 32px 32px;
+  /* clip, not hidden: hidden would make this a scroll container with its own scrollbar. */
+  overflow-x: clip;
+  /* Contains absolutely positioned helpers (e.g. .sr-only) so they never widen the page. */
+  position: relative;
+}
+
+.wrap {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+}
+
+a {
+  color: var(--ink);
+}
+a:hover {
+  color: var(--signal-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal-text);
+  outline-offset: 3px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+.muted {
+  color: var(--muted);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--signal-text);
+  text-transform: uppercase;
+}
+.sr-only {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.thin {
+  font-family: var(--font-thin);
+  font-weight: 200;
+  letter-spacing: 0.01em;
+}
+.section-title {
+  font-size: clamp(40px, 5vw, 60px);
+}
+
+/* Buttons and chips */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+}
+.btn-ink {
+  background: var(--ink);
+  color: var(--paper);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.btn-ink:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 var(--signal);
+  color: var(--paper);
+}
+.btn-line {
+  transition: background 0.18s, color 0.18s;
+}
+.btn-line:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+.btn-sm {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: background 0.15s, color 0.15s;
+}
+button.chip {
+  cursor: copy;
+}
+.chip:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--ink);
+  padding: 2px 8px;
+}
+.tag-llm {
+  border-color: var(--signal-text);
+  color: var(--signal-text);
+}
+.tag-dropped {
+  border-style: dashed;
+  border-color: var(--ember-text);
+  color: var(--ember-text);
+}
+
+/* A grid of bordered cells whose borders stay even however it wraps:
+   the container draws top and left, every cell draws right and bottom. */
+.cells {
+  display: flex;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
+}
+.cells > * {
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.row-hover {
+  transition: background 0.15s;
+}
+.row-hover:hover {
+  background: rgba(19, 209, 124, 0.14);
+}
+
+.table-box {
+  position: relative;
+  border: 1px solid var(--ink);
+  overflow-x: auto;
+}
+
+/* Areas that must scroll on small screens or long output keep scrolling
+   (wheel, touch, keyboard) but never draw a scrollbar. */
+.table-box,
+.scroll-quiet {
+  scrollbar-width: none;
+}
+.table-box::-webkit-scrollbar,
+.scroll-quiet::-webkit-scrollbar {
+  display: none;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.data-table th {
+  text-align: left;
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ink);
+}
+.data-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: middle;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

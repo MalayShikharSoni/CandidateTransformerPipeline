@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { MemoryLlmCache } from "../src/adapters/llm-cache.js";
-import { readResumeText } from "../src/adapters/resume.js";
-import { ResumeExtraction, type ResumeExtractor } from "../src/adapters/resume-llm.js";
+import type { ResumeExtractor } from "../src/adapters/resume-llm.js";
+import { createReplayExtractor } from "../src/adapters/resume-replay.js";
 import { resolveYearsExperience } from "../src/merge/resolve.js";
 import { normalizeEducationEntry, normalizeExperienceEntry } from "../src/normalizers/entries.js";
 import { normalizeFacts } from "../src/normalizers/index.js";
@@ -18,25 +17,13 @@ const AS_OF = "2026-11";
  * real answers are recorded), matched by resume text, so no test calls the API.
  */
 async function replayExtractor() {
-  const saved = JSON.parse(readFileSync("fixtures/resume-llm-responses.json", "utf8")) as {
-    responses: Record<string, { output: unknown }>;
-  };
-  const byText = new Map<string, ResumeExtraction>();
-  for (const [file, entry] of Object.entries(saved.responses)) {
-    const read = await readResumeText(`fixtures/resumes/${file}`);
-    if ("text" in read) {
-      byText.set(read.text, ResumeExtraction.parse(entry.output));
-    }
-  }
+  const replay = await createReplayExtractor("fixtures/resume-llm-responses.json", "fixtures/resumes");
   const calls: string[] = [];
   const extractor: ResumeExtractor = {
-    model: "replay",
-    async extract(text) {
+    model: replay.model,
+    extract(text) {
       calls.push(text);
-      const output = byText.get(text);
-      return output === undefined
-        ? { ok: false, reason: "no saved answer" }
-        : { ok: true, model: "replay", output };
+      return replay.extract(text);
     },
   };
   return { extractor, calls };

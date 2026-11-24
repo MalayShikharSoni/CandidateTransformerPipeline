@@ -1,0 +1,6 @@
+name,email,phone,current_company,title,github_username,resume_path
+Ananya Iyer,ananya.iyer@example.com,+91 98765 43101,Northwind Labs,Senior Backend Engineer,,resumes/ananya-iyer.pdf
+Daniel Okafor,daniel.okafor@example.org,,Fabrikam Health,Lead Developer,,resumes/daniel-okafor.pdf
+Sofia Marín,sofia.marin@example.net,+91 98765 43103,Woodgrove Bank,Data Analyst,,resumes/sofia-marin.docx
+Kenji Watanabe,kenji.w@example.com,,Adventure Works,Site Reliability Engineer,,resumes/kenji-watanabe.txt
+Ravi Kumar,ravi.kumar@example.com,,Litware Inc,Support Engineer,,resumes/ravi-kumar.pdf

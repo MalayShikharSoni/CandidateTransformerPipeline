@@ -6,8 +6,8 @@ the deviation and asking first.
 
 ## What this is
 
-A CLI tool that ingests candidate data from three sources, merges it into one canonical
-profile per candidate, and projects it into a configurable output shape. Full spec
+CanonVerge: a CLI and a web app that ingest candidate data from three sources, merge it
+into one canonical profile per candidate, and project it into a configurable output shape. Full spec
 lives in `docs/problem-statement.md`. Design rationale lives in `docs/design-doc.md`
 (`docs/design-doc.pdf` is the original two-source version and predates the resume
 source), which reflects already-finalized decisions; this file
@@ -19,9 +19,13 @@ operationalizes it for implementation.
 - Libraries: `zod` (schema validation), `vitest` (testing), `csv-parse` (CSV),
   `libphonenumber-js` (phone normalization), native `fetch` (GitHub API calls — no axios needed),
   `unpdf` / `mammoth` (resume text), `@anthropic-ai/sdk` (the one LLM call, see below).
-- No frameworks. No Express/Nest (this is a CLI, not a server). No LangChain,
-  no Hugging Face. Exactly one LLM call site: resume extraction (rules below).
-  No ORM, no database — everything is in-memory for the scope of a CLI run.
+- The web app is a React + Vite front end (`web/`) and a thin **Hono** API
+  (`src/server/`) that only wraps `runPipeline`. It stays stateless: no database, no
+  sessions, no auth, nothing kept after a run (uploads go to a temp folder deleted in
+  `finally`; results live in the browser tab). No other server framework.
+- No LangChain, no Hugging Face. Exactly one LLM call site: resume extraction (rules
+  below), opt-in per run in the CLI (`--llm`) and the web app (toggle).
+- No ORM, no database — everything is in-memory for the scope of one run.
 - Package manager: npm.
 
 ## Sources (exactly these three)

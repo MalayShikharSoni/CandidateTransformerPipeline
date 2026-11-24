@@ -770,6 +770,21 @@ export function resolveCandidateGroup(
   group: CandidateFactGroup,
   asOf?: string,
 ): CanonicalCandidate {
+  return resolveCandidateDetailed(group, asOf).canonical;
+}
+
+/** Confidence of each populated field, keyed by canonical path (no entry = no value). */
+export type FieldConfidence = Record<string, number>;
+
+/**
+ * Same as resolveCandidateGroup, plus the per-field confidences that feed
+ * overall_confidence. The web UI shows them; the CLI output schema has no
+ * place for them, so they travel beside the record, never inside it.
+ */
+export function resolveCandidateDetailed(
+  group: CandidateFactGroup,
+  asOf?: string,
+): { canonical: CanonicalCandidate; fieldConfidence: FieldConfidence } {
   const { facts, matchKey, candidateId } = group;
 
   const fullName = resolveScalarField(facts, "full_name", matchKey);
@@ -800,21 +815,28 @@ export function resolveCandidateGroup(
     locationProvenance,
   ].filter((entry): entry is ProvenanceEntry => entry !== null);
 
-  const overall_confidence = averageConfidence([
-    fullName.confidence,
-    headline.confidence,
-    githubLink.confidence,
-    portfolioLink.confidence,
-    linkedinLink.confidence,
-    emails.confidence,
-    phones.confidence,
-    skills.confidence,
-    experience.confidence,
-    education.confidence,
-    yearsExperience.confidence,
-  ]);
+  const scored: Array<[string, number | null]> = [
+    ["full_name", fullName.confidence],
+    ["headline", headline.confidence],
+    ["links.github", githubLink.confidence],
+    ["links.portfolio", portfolioLink.confidence],
+    ["links.linkedin", linkedinLink.confidence],
+    ["emails", emails.confidence],
+    ["phones", phones.confidence],
+    ["skills", skills.confidence],
+    ["experience", experience.confidence],
+    ["education", education.confidence],
+    ["years_experience", yearsExperience.confidence],
+  ];
+  const overall_confidence = averageConfidence(scored.map(([, score]) => score));
+  const fieldConfidence: FieldConfidence = {};
+  for (const [field, score] of scored) {
+    if (score !== null) {
+      fieldConfidence[field] = score;
+    }
+  }
 
-  return {
+  const canonical: CanonicalCandidate = {
     candidate_id: candidateId,
     // Reachable when no full_name fact exists (e.g. GitHub sparse_profile-only group).
     // Ineligible-but-present full_name is dead code today — all scalar fields are passthrough.
@@ -836,4 +858,5 @@ export function resolveCandidateGroup(
     provenance,
     overall_confidence,
   };
+  return { canonical, fieldConfidence };
 }

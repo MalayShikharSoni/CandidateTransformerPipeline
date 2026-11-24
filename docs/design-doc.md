@@ -69,6 +69,16 @@ Added after the first build to fill the fields CSV + GitHub can't reach: `experi
 - Two-digit years ("Jan '21") don't normalize; the job is kept without dates at halved confidence.
 - Resume text goes to the Anthropic API under the account's data-retention terms. That is why `--llm` is opt-in and the fixtures are synthetic.
 
+## Web UI
+
+The web app is a second front end on the same pipeline, not a second implementation.
+
+- **Thin, stateless server.** A Hono API (`src/server/`) saves a run's uploads to a temp folder, calls `runPipeline`, and deletes the folder. No database, sessions or auth; results stream back and stay in the browser tab.
+- **Live progress without coupling.** `runPipeline` takes an optional `onEvent` callback (stage start/end, each source read, warnings). The server forwards it as server-sent events; the CLI ignores it. Confidence, project and validate run as three passes so each stage has a real start and end; output is unchanged (golden files identical).
+- **No path tricks.** In the web app, a CSV's `resume_path` is matched to uploaded files by file name only (`resolveResumePath`), so a crafted CSV can't make the server read other files.
+- **Per-field confidence beside the record.** The canonical schema has no slot for it, so `includeFieldConfidence` returns it next to the records for the profile page; CLI output is untouched.
+- **Look.** A lab sheet rather than a dashboard: warm paper, ink, one signal green for annotations, ember orange only for rejected values; generated ASCII art that animates and stops under reduced motion.
+
 ## Deliberately out of scope
 
 - Fuzzy/probabilistic entity resolution — matching is deterministic only (see known limitation above).

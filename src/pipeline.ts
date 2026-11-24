@@ -12,7 +12,7 @@ import type { LlmCache } from "./adapters/llm-cache.js";
 import { readResumeFacts } from "./adapters/resume.js";
 import type { ResumeExtractor } from "./adapters/resume-llm.js";
 import { groupFactsByCandidate } from "./merge/group.js";
-import { resolveCandidateGroup } from "./merge/resolve.js";
+import { resolveCandidateDetailed, type FieldConfidence } from "./merge/resolve.js";
 import { normalizeFacts } from "./normalizers/index.js";
 import { projectCandidate } from "./projection/project.js";
 import type { ProjectionConfig } from "./schemas/config.js";
@@ -43,6 +43,38 @@ export interface PipelineOptions {
   llmCache?: LlmCache;
   /** YYYY-MM that ongoing jobs run to for years_experience. Defaults to the current UTC month. */
   asOf?: string;
+  /**
+   * Maps a resume_path from the CSV to a file to read, or undefined when there
+   * is none. The web server matches uploaded files by name, so a CSV can never
+   * point it at other files on the server. Default: relative to the CSV's folder.
+   */
+  resolveResumePath?: (shownAs: string) => string | undefined;
+  /** Progress callback: stage starts and ends, each source read, warnings. */
+  onEvent?: (event: PipelineEvent) => void;
+  /** Also return per-field confidences (result.details). */
+  includeFieldConfidence?: boolean;
+}
+
+export const STAGES = [
+  "ingest",
+  "extract",
+  "normalize",
+  "merge",
+  "confidence",
+  "project",
+  "validate",
+  "emit",
+] as const;
+export type StageName = (typeof STAGES)[number];
+
+export type PipelineEvent =
+  | { type: "stage"; stage: StageName; status: "start" | "done" }
+  | { type: "source"; source: "github" | "resume"; subject: string; ok: boolean }
+  | { type: "warning"; warning: SourceWarning };
+
+export interface CandidateDetail {
+  candidate_id: string;
+  fieldConfidence: FieldConfidence;
 }
 
 /** One output record: the projected candidate, or why it could not be produced. */
@@ -67,7 +99,14 @@ export interface PipelineStats {
 }
 
 export type PipelineResult =
-  | { ok: true; records: OutputRecord[]; warnings: SourceWarning[]; stats: PipelineStats }
+  | {
+      ok: true;
+      records: OutputRecord[];
+      warnings: SourceWarning[];
+      stats: PipelineStats;
+      /** Same order as records; only with includeFieldConfidence. */
+      details?: CandidateDetail[];
+    }
   | { ok: false; error: string };
 
 interface FetchJob {
@@ -137,26 +176,50 @@ async function readResumesForRows(
   options: PipelineOptions,
 ): Promise<ResumeReadResult> {
   const csvDir = dirname(options.csvPath);
-  const jobs: Array<{ rowIndex: number; path: string; shownAs: string }> = [];
+  const resolveDefault = (shownAs: string) =>
+    isAbsolute(shownAs) ? shownAs : resolvePath(csvDir, shownAs);
+  const resolveFile = options.resolveResumePath ?? resolveDefault;
+  const jobs: Array<{ rowIndex: number; path: string | undefined; shownAs: string }> = [];
   for (const [rowIndex, rowFacts] of rowBuckets) {
     const shownAs = resumePathFromRow(rowFacts);
     if (shownAs !== undefined) {
-      const path = isAbsolute(shownAs) ? shownAs : resolvePath(csvDir, shownAs);
-      jobs.push({ rowIndex, path, shownAs });
+      jobs.push({ rowIndex, path: resolveFile(shownAs), shownAs });
     }
   }
 
   const limit = pLimit(RESUME_CONCURRENCY);
   const results = await Promise.all(
     jobs.map((job) =>
-      limit(() =>
-        readResumeFacts(job.path, {
-          rowIndex: job.rowIndex,
+      limit(async () => {
+        const result =
+          job.path === undefined
+            ? {
+                facts: [],
+                warnings: [
+                  {
+                    source: "resume" as const,
+                    subject: job.shownAs,
+                    message: "no uploaded file has this name.",
+                  },
+                ],
+                llmCalled: false,
+                llmCacheHit: false,
+                droppedValues: 0,
+              }
+            : await readResumeFacts(job.path, {
+                rowIndex: job.rowIndex,
+                subject: job.shownAs,
+                extract: options.extractResume,
+                cache: options.llmCache,
+              });
+        options.onEvent?.({
+          type: "source",
+          source: "resume",
           subject: job.shownAs,
-          extract: options.extractResume,
-          cache: options.llmCache,
-        }),
-      ),
+          ok: result.warnings.length === 0,
+        });
+        return result;
+      }),
     ),
   );
 
@@ -226,6 +289,12 @@ async function fetchGitHubFactsForJobs(
         factsByUsername.set(username, result.facts);
         warnings.push(...result.warnings);
         cacheHits += result.cacheHits;
+        options.onEvent?.({
+          type: "source",
+          source: "github",
+          subject: username,
+          ok: result.warnings.length === 0,
+        });
       }),
     ),
   );
@@ -238,7 +307,6 @@ async function fetchGitHubFactsForJobs(
     }
   }
 
-
   return {
     facts,
     warnings: sortWarnings(warnings),
@@ -248,22 +316,16 @@ async function fetchGitHubFactsForJobs(
   };
 }
 
-function toOutputRecord(
-  group: ReturnType<typeof groupFactsByCandidate>[number],
-  config: ProjectionConfig,
-  asOf: string,
-): OutputRecord {
-  const canonical = resolveCandidateGroup(group, asOf);
-  const projected = projectCandidate(canonical, config);
-  if ("error" in projected) {
-    return { error: projected.error };
-  }
-
-  const validated = validateProjectedOutput(projected, config);
-  return validated.ok ? validated.data : { error: validated.error };
-}
-
 export async function runPipeline(options: PipelineOptions): Promise<PipelineResult> {
+  const emit = options.onEvent ?? (() => undefined);
+  const stage = <T>(name: StageName, work: () => T): T => {
+    emit({ type: "stage", stage: name, status: "start" });
+    const result = work();
+    emit({ type: "stage", stage: name, status: "done" });
+    return result;
+  };
+
+  emit({ type: "stage", stage: "ingest", status: "start" });
   const csv = await readCsvFacts(options.csvPath);
   if (csv.error !== undefined) {
     return { ok: false, error: csv.error };
@@ -284,17 +346,39 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRes
         }),
     readResumesForRows(rowBuckets, options),
   ]);
+  const warnings = sortWarnings([...github.warnings, ...resumes.warnings]);
+  for (const warning of warnings) {
+    emit({ type: "warning", warning });
+  }
+  emit({ type: "stage", stage: "ingest", status: "done" });
 
-  const groups = groupFactsByCandidate(
-    normalizeFacts([...csv.facts, ...resumes.facts, ...github.facts]),
-  );
+  // Every source already mapped its data to RawFacts while being read; this
+  // stage just pools them.
+  const facts = stage("extract", () => [...csv.facts, ...resumes.facts, ...github.facts]);
+  const normalized = stage("normalize", () => normalizeFacts(facts));
+  const groups = stage("merge", () => groupFactsByCandidate(normalized));
   const asOf = options.asOf ?? currentMonth();
-  const records = groups.map((group) => toOutputRecord(group, options.config, asOf));
+  const resolved = stage("confidence", () =>
+    groups.map((group) => resolveCandidateDetailed(group, asOf)),
+  );
+  const projected = stage("project", () =>
+    resolved.map(({ canonical }) => projectCandidate(canonical, options.config)),
+  );
+  const records = stage("validate", () =>
+    projected.map((record): OutputRecord => {
+      if ("error" in record) {
+        return { error: record.error };
+      }
+      const validated = validateProjectedOutput(record, options.config);
+      return validated.ok ? validated.data : { error: validated.error };
+    }),
+  );
 
-  return {
+  emit({ type: "stage", stage: "emit", status: "start" });
+  const result: PipelineResult = {
     ok: true,
     records,
-    warnings: sortWarnings([...github.warnings, ...resumes.warnings]),
+    warnings,
     stats: {
       csvRows: csv.rowCount,
       githubUsernames: github.usernames,
@@ -309,5 +393,13 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRes
       candidates: records.length,
       candidateErrors: records.filter((record) => "error" in record).length,
     },
+    details: options.includeFieldConfidence
+      ? resolved.map(({ canonical, fieldConfidence }) => ({
+          candidate_id: canonical.candidate_id,
+          fieldConfidence,
+        }))
+      : undefined,
   };
+  emit({ type: "stage", stage: "emit", status: "done" });
+  return result;
 }

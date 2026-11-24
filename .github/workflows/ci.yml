@@ -40,6 +40,16 @@ jobs:
           node dist/cli.js --csv fixtures/recruiter.csv --no-cache --output out.json
           node -e "const out = require('./out.json'); if (out.length !== 4) { throw new Error('expected 4 records, got ' + out.length); }"
 
+      # The web app: built pages and the API served by one Node process.
+      - name: Smoke test the web server
+        shell: bash
+        run: |
+          node dist/server/main.js --port 8788 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8788/api/health && break; sleep 1; done
+          curl -sf http://localhost:8788/api/health | grep -q '"ok":true'
+          curl -sf http://localhost:8788/workbench | grep -q 'id="root"'
+          kill %1
+
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
