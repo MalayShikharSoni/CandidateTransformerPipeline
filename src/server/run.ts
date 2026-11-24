@@ -26,8 +26,6 @@ export const LIMITS = {
 const RESUME_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md"]);
 
 export interface RunDeps {
-  /** Present only when the server has Anthropic credentials. */
-  extractor?: ResumeExtractor;
   fetch?: FetchFn;
   githubCache?: ResponseCache;
   llmCache?: LlmCache;
@@ -60,6 +58,25 @@ export interface RunResult {
   schema: "default" | "custom";
   asOf: string | null;
   llmUsed: boolean;
+  /** Who read the resumes' layout: Claude, the demo replay, or nobody (regex only). */
+  llmMode: LlmPlan["mode"];
+}
+
+/** Decided per request in app.ts (access code, daily cap, demo). */
+export interface LlmPlan {
+  mode: "claude" | "demo" | "none";
+  extractor?: ResumeExtractor;
+  /** Shown in the run log, e.g. why the LLM is off for this run. */
+  notes: string[];
+}
+
+/** Counts only, for the server log: never names, emails or file names. */
+export interface RunSummary {
+  status: "ok" | "error";
+  rows: number;
+  resumes: number;
+  candidates: number;
+  llm: LlmPlan["mode"];
 }
 
 /** Server-sent event names and their payloads. */
@@ -124,8 +141,16 @@ export function parseRunInput(body: FormBody): { ok: true; input: RunInput } | {
 export async function executeRun(
   input: RunInput,
   deps: RunDeps,
+  plan: LlmPlan,
   send: (event: RunEvent) => Promise<void>,
-): Promise<void> {
+): Promise<RunSummary> {
+  const summary: RunSummary = {
+    status: "error",
+    rows: 0,
+    resumes: input.resumes.length,
+    candidates: 0,
+    llm: plan.mode,
+  };
   const dir = await mkdtemp(join(deps.tmpRoot ?? tmpdir(), "canonverge-"));
   // Never show the server's temp path to the browser.
   const scrub = (text: string) => text.split(dir).join("upload");
@@ -150,7 +175,6 @@ export async function executeRun(
       uploaded.set(name, path);
     }
 
-    const useLlm = input.options.llm && deps.extractor !== undefined;
     enqueue({
       event: "log",
       data: {
@@ -158,14 +182,8 @@ export async function executeRun(
         text: `read ${input.csv.name} and ${input.resumes.length} resume file(s)`,
       },
     });
-    if (input.options.llm && !useLlm) {
-      enqueue({
-        event: "log",
-        data: {
-          level: "note",
-          text: "LLM extraction is not set up on this server (no ANTHROPIC_API_KEY); resumes are read with regex only.",
-        },
-      });
+    for (const note of plan.notes) {
+      enqueue({ event: "log", data: { level: "note", text: note } });
     }
 
     const config = input.options.config ?? DEFAULT_CONFIG;
@@ -175,7 +193,7 @@ export async function executeRun(
       githubUser: input.options.githubUser,
       fetch: deps.fetch,
       cache: deps.githubCache,
-      extractResume: useLlm ? deps.extractor : undefined,
+      extractResume: plan.mode === "none" ? undefined : plan.extractor,
       llmCache: deps.llmCache,
       asOf: input.options.asOf,
       includeFieldConfidence: true,
@@ -207,9 +225,13 @@ export async function executeRun(
           details: result.details ?? [],
           schema: input.options.config === undefined ? "default" : "custom",
           asOf: input.options.asOf ?? null,
-          llmUsed: useLlm,
+          llmUsed: plan.mode !== "none",
+          llmMode: plan.mode,
         },
       });
+      summary.status = "ok";
+      summary.rows = result.stats.csvRows;
+      summary.candidates = result.stats.candidates;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -218,4 +240,5 @@ export async function executeRun(
     await queue.catch(() => undefined);
     await rm(dir, { recursive: true, force: true });
   }
+  return summary;
 }

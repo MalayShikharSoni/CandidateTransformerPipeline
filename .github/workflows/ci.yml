@@ -69,3 +69,28 @@ jobs:
         run: |
           docker run --rm -e GITHUB_TOKEN -v "$PWD:/data" candidate-transformer \
             --csv fixtures/recruiter.csv --no-cache --format ndjson | wc -l | grep -qx 4
+
+  web-image:
+    name: Web image (what Render deploys)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f Dockerfile.web -t canonverge-web .
+      - name: Run the image and exercise it over HTTP
+        run: |
+          docker run -d --name web -p 8787:8787             -e ACCESS_CODE=ci-code -e RATE_LIMIT_PER_HOUR=20 canonverge-web
+          for i in $(seq 1 30); do curl -sf http://localhost:8787/api/health && break; sleep 1; done
+          echo
+          # Health: demo on, no real LLM (no key in CI), no secrets echoed.
+          curl -sf http://localhost:8787/api/health | grep -q '"llmDemo":true'
+          # Pages are served with a strict CSP; deep links fall back to the app.
+          curl -sfD - -o /dev/null http://localhost:8787/ | grep -qi "content-security-policy: default-src 'self'"
+          curl -sf http://localhost:8787/workbench | grep -q 'id="root"'
+          # A sample batch in LLM demo mode streams a result with 5 candidates.
+          curl -sfN http://localhost:8787/api/runs             -F csv=@fixtures/recruiter-with-resumes.csv             -F resumes=@fixtures/resumes/ananya-iyer.pdf             -F resumes=@fixtures/resumes/kenji-watanabe.txt             -F 'options={"llm":true,"asOf":"2026-11"}' > run.txt
+          grep -q '^event: result' run.txt
+          grep '^data:' run.txt | tail -1 | grep -q '"candidates":5'
+          grep '^data:' run.txt | tail -1 | grep -q '"llmMode":"demo"'
+          sleep 1
+          docker logs web | grep -q '"event":"run"'
+          docker rm -f web

@@ -48,7 +48,12 @@ resumes, copied to `web/public/samples/`).
 | `GITHUB_TOKEN` / `GH_TOKEN` | 5,000 GitHub requests/hour instead of 60. |
 | `PORT` | Server port for `npm start` (`--port` overrides it). |
 | `CACHE_DIR` | Where GitHub ETags and LLM answers are cached (default `.cache`). |
-| `REPLAY_LLM=1` | Dev only: replay saved fixture answers instead of calling Claude (same as `--replay`). |
+| `ACCESS_CODE` | When set, real Claude runs need this code (sent by the workbench as the `x-access-code` header). |
+| `LLM_DEMO=1` | LLM runs without real access replay the saved answers for the sample batch (same as `--replay`; `REPLAY_LLM=1` still works). |
+| `LLM_DAILY_CAP` | Real Claude calls per UTC day (default 200); after that runs fall back to regex/demo with a note. |
+| `LLM_MAX_RESUMES` | Most resumes one real LLM run may send (default 10). |
+| `RATE_LIMIT_PER_HOUR` | Runs per client IP per hour (default 0 = unlimited). |
+| `TRUSTED_PROXY_HOPS` | `X-Forwarded-For` hops added by your own proxy (Render: 1); 0 uses the socket address. |
 
 **What the server keeps:** nothing. Each run's uploads go to a fresh temp
 folder that is deleted when the run ends; results stream back to the browser
@@ -62,7 +67,40 @@ other files. Limits: CSV ≤ 5 MB, ≤ 25 resumes of ≤ 10 MB, 50 MB per reques
 `text/event-stream` of `stage`, `source`, `warning`, `log` events and a final
 `result` (records, stats, warnings, per-field confidences) or `error`.
 
-The Dockerfile still builds the CLI image; a web image comes with the deployment work.
+`Dockerfile` builds the CLI image; `Dockerfile.web` builds the web app (below).
+
+---
+
+## Deploying (Render)
+
+The web app deploys to [Render](https://render.com) from `render.yaml` (a
+Blueprint): one Docker web service built from `Dockerfile.web`, health-checked
+on `/api/health`, redeployed from `main` only after CI passes.
+
+1. In Render: **New → Blueprint**, connect GitHub, pick this repo.
+2. When asked, enter the secrets: `ANTHROPIC_API_KEY`, `ACCESS_CODE` (any
+   phrase you'll share with people allowed to run Claude) and optionally
+   `GITHUB_TOKEN` (a token with no scopes). They never go in git.
+3. The first build takes a few minutes; the app is then at
+   `https://canonverge.onrender.com` (or the name Render gives it).
+
+**Who can do what on the public site:** everyone can run batches (regex
+extraction) and the LLM *demo*, which replays saved answers for the sample
+batch. Real Claude extraction needs the access code. Every IP gets 20 runs an
+hour (wrong-code attempts count too), Claude gets at most 200 calls a day and
+10 resumes per run.
+
+**Caveats:**
+- The `free` plan sleeps after ~15 idle minutes; the next visit takes ~30–60 s
+  to wake it. Change `plan` in `render.yaml` to keep it awake.
+- The disk is ephemeral: the GitHub and LLM caches reset on each deploy or
+  restart (a re-run after that calls Claude again).
+- Rate limits and the daily cap live in memory, which is right for one
+  instance; running several instances would need a shared store.
+
+Before the first deploy, check that the latest CI run on `main` is green,
+including the **Web image** job, which builds `Dockerfile.web` and exercises
+it over HTTP.
 
 ---
 
@@ -213,7 +251,7 @@ path, confidence on.
 ## Tests, linting and CI
 
 ```bash
-npm test            # 197 tests (pipeline, server and web app)
+npm test            # 212 tests (pipeline, server and web app)
 npm run coverage    # tests + coverage report (fails below 85% lines)
 npm run lint        # ESLint with type-aware rules
 npm run typecheck   # tsc over src, tests and scripts, then over web/

@@ -1,0 +1,31 @@
+# The CanonVerge web app: built pages + API in one Node process.
+# (Dockerfile builds the CLI image; this one is what Render deploys.)
+
+# Build stage: install everything, compile the server and the pages, then drop dev dependencies.
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+COPY web ./web
+RUN npm run build && npm prune --omit=dev
+
+# Runtime stage: compiled server, built pages, production dependencies, and the
+# sample batch's saved answers for the LLM demo. Nothing else from the repo.
+FROM node:22-alpine
+ENV NODE_ENV=production \
+    LLM_DEMO=1 \
+    PORT=8787
+WORKDIR /app
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/web/dist ./web/dist
+COPY fixtures/resume-llm-responses.json ./fixtures/resume-llm-responses.json
+COPY fixtures/resumes ./fixtures/resumes
+USER node
+EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT}/api/health" > /dev/null || exit 1
+CMD ["node", "dist/server/main.js"]

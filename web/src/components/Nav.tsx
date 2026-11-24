@@ -56,7 +56,15 @@ export function Nav() {
         <span className="nav-status mono muted" aria-live="polite">
           {health === null
             ? "API ○ OFFLINE"
-            : `LLM ${health.llmMode === "replay" ? "● REPLAY" : health.llmAvailable ? "● ON" : "○ OFF"} · GITHUB TOKEN ${health.githubToken ? "● SET" : "○ NONE"}`}
+            : `LLM ${
+                health.llmAccess === "open"
+                  ? "● ON"
+                  : health.llmAccess === "code"
+                    ? "● CODE"
+                    : health.llmDemo
+                      ? "● DEMO"
+                      : "○ OFF"
+              } · GITHUB TOKEN ${health.githubToken ? "● SET" : "○ NONE"}`}
         </span>
       </nav>
     </header>

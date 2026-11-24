@@ -24,7 +24,9 @@ operationalizes it for implementation.
   sessions, no auth, nothing kept after a run (uploads go to a temp folder deleted in
   `finally`; results live in the browser tab). No other server framework.
 - No LangChain, no Hugging Face. Exactly one LLM call site: resume extraction (rules
-  below), opt-in per run in the CLI (`--llm`) and the web app (toggle).
+  below), opt-in per run in the CLI (`--llm`) and the web app (toggle). On the public
+  deployment, real Claude runs need `ACCESS_CODE`; everyone else gets the replayed demo.
+  Keep the per-IP rate limit and the daily Claude cap on whenever a key is configured.
 - No ORM, no database — everything is in-memory for the scope of one run.
 - Package manager: npm.
 

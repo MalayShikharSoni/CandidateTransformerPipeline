@@ -1,0 +1,37 @@
+# Render Blueprint for the CanonVerge web app.
+# Create it from the Render dashboard: New → Blueprint → pick this repo.
+# Render asks for the three secrets below once, at creation; they never live in git.
+services:
+  - type: web
+    name: canonverge
+    runtime: docker
+    dockerfilePath: ./Dockerfile.web
+    dockerContext: .
+    # free sleeps after ~15 idle minutes (first visit then takes ~30-60 s).
+    # Change to a paid plan (e.g. 0.5c-512mb) to keep it awake.
+    plan: free
+    region: singapore
+    branch: main
+    # Deploy a push to main only after its GitHub Actions checks pass.
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health
+    envVars:
+      # Secrets: entered in the dashboard, never committed.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ACCESS_CODE
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      # Plain settings.
+      - key: LLM_DEMO
+        value: "1"
+      - key: LLM_DAILY_CAP
+        value: "200"
+      - key: LLM_MAX_RESUMES
+        value: "10"
+      - key: RATE_LIMIT_PER_HOUR
+        value: "20"
+      # Render's proxy adds one X-Forwarded-For hop; trust only that one.
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"

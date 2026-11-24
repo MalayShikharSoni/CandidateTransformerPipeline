@@ -25,18 +25,30 @@ function streamResponse(text: string): Response {
 }
 
 let runBody: FormData | null = null;
+let runHeaders: Record<string, string> = {};
+let health: Record<string, unknown> = {};
+let runStatus = 200;
 
 beforeEach(() => {
   sessionStorage.clear();
   runBody = null;
+  runHeaders = {};
+  runStatus = 200;
+  health = { ok: true, llmAvailable: false, llmAccess: "off", llmDemo: false, githubToken: false };
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/health") {
-        return Promise.resolve(Response.json({ ok: true, llmAvailable: false, llmMode: "off", githubToken: false }));
+        return Promise.resolve(Response.json(health));
       }
       if (url === "/api/runs") {
         runBody = init?.body as FormData;
+        runHeaders = (init?.headers ?? {}) as Record<string, string>;
+        if (runStatus !== 200) {
+          return Promise.resolve(
+            Response.json({ error: "Too many runs from your network. Try again in 12 min." }, { status: runStatus }),
+          );
+        }
         const events =
           STAGES.flatMap((stage) => [sse("stage", { stage, status: "start" }), sse("stage", { stage, status: "done" })]).join("") +
           sse("warning", SAMPLE_RESULT.warnings[0]) +
@@ -104,5 +116,40 @@ describe("Workbench", () => {
     const bad = new File(["name,email\nA,a@x.com\n"], "bad.csv");
     fireEvent.change(screen.getByLabelText("Recruiter CSV"), { target: { files: [bad] } });
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("phone, current_company, title"));
+  });
+
+  async function loadCsv() {
+    const csv = new File(["name,email,phone,current_company,title\nA,a@x.com,,Acme,Dev\n"], "batch.csv");
+    fireEvent.change(screen.getByLabelText("Recruiter CSV"), { target: { files: [csv] } });
+    await waitFor(() => expect(screen.getByText("1 rows · 5 columns")).toBeTruthy());
+  }
+
+  it("offers the demo without a code and sends a typed access code as a header, never in the form", async () => {
+    health = { ok: true, llmAvailable: true, llmAccess: "code", llmDemo: true, githubToken: false };
+    renderBench();
+    await loadCsv();
+    const toggle = screen.getByRole<HTMLButtonElement>("button", { name: "LLM extraction" });
+    await waitFor(() => expect(toggle.disabled).toBe(false));
+    fireEvent.click(toggle);
+    expect(screen.getByText(/Demo: replays saved answers for the sample batch/)).toBeTruthy();
+
+    const codeField = screen.getByLabelText(/ACCESS CODE/);
+    expect(codeField.getAttribute("type")).toBe("password");
+    fireEvent.change(codeField, { target: { value: " open sesame " } });
+    expect(screen.getByText(/Sends resume text to the Anthropic API/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /run pipeline/i }));
+    await waitFor(() => expect(runHeaders["x-access-code"]).toBe("open sesame"));
+    expect(runBody?.get("options")).not.toContain("sesame");
+    expect(JSON.stringify(sessionStorage)).not.toContain("sesame");
+  });
+
+  it("shows the server's message when the run is refused", async () => {
+    runStatus = 429;
+    renderBench();
+    await loadCsv();
+    fireEvent.click(screen.getByRole("button", { name: /run pipeline/i }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Too many runs from your network. Try again in 12 min."));
+    expect(screen.getByRole("status").textContent).toContain("FAILED");
   });
 });

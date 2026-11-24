@@ -6,3 +6,7 @@ coverage
 .git
 tests
 docs
+web/dist
+private
+.claude
+**/node_modules

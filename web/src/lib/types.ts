@@ -83,6 +83,7 @@ export interface RunResult {
   schema: "default" | "custom";
   asOf: string | null;
   llmUsed: boolean;
+  llmMode?: "claude" | "demo" | "none";
 }
 
 export const STAGES = [
@@ -108,7 +109,9 @@ export type RunEvent =
 export interface Health {
   ok: boolean;
   llmAvailable: boolean;
-  /** "replay" = saved fixture answers in dev, no API calls. */
-  llmMode: "claude" | "replay" | "off";
+  /** Real Claude runs: open to all, behind an access code, or not set up. */
+  llmAccess: "open" | "code" | "off";
+  /** LLM runs without real access replay saved answers for the sample batch. */
+  llmDemo: boolean;
   githubToken: boolean;
 }

@@ -409,6 +409,7 @@ export function Landing() {
               <span className="footer-head">YOUR DATA</span>
               <span>Uploads deleted after each run</span>
               <span>Results stay in this browser tab</span>
+              <span>LLM runs send resume text to Anthropic</span>
             </div>
             <Barcode hex={EXAMPLE_ID} />
           </div>

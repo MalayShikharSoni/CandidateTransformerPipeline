@@ -90,6 +90,8 @@ export function Workbench() {
   const [llm, setLlm] = useState(false);
   const [asOf, setAsOf] = useState(currentMonth());
   const [githubUser, setGithubUser] = useState("");
+  // Kept in memory for this tab only; never written to storage.
+  const [accessCode, setAccessCode] = useState("");
   const [schema, setSchema] = useState<"default" | "custom">("default");
   const [config, setConfig] = useState<{ name: string; value: unknown } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -106,7 +108,11 @@ export function Workbench() {
   useEffect(() => () => abort.current?.abort(), []);
 
   const result: RunResult | null = run?.result ?? null;
-  const llmAvailable = health?.llmAvailable ?? false;
+  const llmAccess = health?.llmAccess ?? "off";
+  const llmDemo = health?.llmDemo ?? false;
+  const llmUsable = llmAccess !== "off" || llmDemo;
+  // Real Claude runs: open servers, or a code was typed (the server checks it).
+  const realLlm = llmAccess === "open" || (llmAccess === "code" && accessCode.trim() !== "");
 
   const pickCsv = async (file: File) => {
     setFormError(null);
@@ -227,6 +233,7 @@ export function Workbench() {
             githubUser: githubUser.trim() || undefined,
             config: schema === "custom" ? config?.value : undefined,
           },
+          accessCode: llm && accessCode.trim() !== "" ? accessCode.trim() : undefined,
         },
         onEvent,
         abort.current.signal,
@@ -347,21 +354,35 @@ export function Workbench() {
                 className={`toggle${llm ? " toggle-on" : ""}`}
                 aria-pressed={llm}
                 aria-label="LLM extraction"
-                disabled={!llmAvailable}
+                disabled={!llmUsable}
                 onClick={() => setLlm((value) => !value)}
               >
                 <span />
               </button>
             </div>
-            {!llmAvailable && (
+            {!llmUsable && (
               <p className="note mono">Not set up on this server (no ANTHROPIC_API_KEY). Resumes are read with regex only.</p>
             )}
-            {llm && health?.llmMode === "replay" && (
+            {llm && llmAccess === "code" && (
+              <label className="field-col">
+                <span className="mono">ACCESS CODE {llmDemo ? "(optional)" : ""}</span>
+                <input
+                  type="password"
+                  className="mono"
+                  autoComplete="off"
+                  value={accessCode}
+                  placeholder="for real extraction with Claude"
+                  onChange={(event) => setAccessCode(event.target.value)}
+                />
+              </label>
+            )}
+            {llm && !realLlm && llmDemo && (
               <p className="note mono">
-                Replay mode (dev): answers come from saved stand-ins in fixtures/, not from Claude. Only the sample resumes have one.
+                Demo: replays saved answers for the sample batch, no API calls. Other resumes are read with regex only.
+                {llmAccess === "code" ? " Enter an access code for real extraction." : ""}
               </p>
             )}
-            {llm && health?.llmMode === "claude" && (
+            {llm && realLlm && (
               <p className="note note-warn mono">
                 Sends resume text to the Anthropic API. Answers are cached, so a re-run costs nothing and gives the same output.
               </p>

@@ -77,6 +77,8 @@ The web app is a second front end on the same pipeline, not a second implementat
 - **Live progress without coupling.** `runPipeline` takes an optional `onEvent` callback (stage start/end, each source read, warnings). The server forwards it as server-sent events; the CLI ignores it. Confidence, project and validate run as three passes so each stage has a real start and end; output is unchanged (golden files identical).
 - **No path tricks.** In the web app, a CSV's `resume_path` is matched to uploaded files by file name only (`resolveResumePath`), so a crafted CSV can't make the server read other files.
 - **Per-field confidence beside the record.** The canonical schema has no slot for it, so `includeFieldConfidence` returns it next to the records for the profile page; CLI output is untouched.
+- **Deployment.** Render runs `Dockerfile.web` as one long-lived Node process. Vercel was considered: its functions cap request bodies at 4.5 MB (too small for a batch of PDFs) and share no memory or disk between calls, so the caches, rate limits and daily LLM cap would need an external store. Render runs the server unchanged.
+- **Cost and abuse.** Real Claude runs need an access code (compared in constant time); without it, LLM runs replay saved answers for the sample batch. Per-IP rate limits (counting only the proxy-added `X-Forwarded-For` hop), a daily Claude cap and a per-run resume cap bound the spend; logs hold counts only.
 - **Look.** A lab sheet rather than a dashboard: warm paper, ink, one signal green for annotations, ember orange only for rejected values; generated ASCII art that animates and stops under reduced motion.
 
 ## Deliberately out of scope
