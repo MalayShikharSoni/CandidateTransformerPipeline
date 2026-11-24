@@ -89,6 +89,11 @@ describe("createLogger", () => {
     githubUsernamesWithWarnings: 0,
     githubCacheHits: 2,
     githubRateLimitRemaining: 4998,
+    resumes: 0,
+    resumesWithWarnings: 0,
+    resumeLlmCalls: 0,
+    resumeLlmCacheHits: 0,
+    resumeValuesDropped: 0,
     candidates: 4,
     candidateErrors: 0,
   };
@@ -105,7 +110,7 @@ describe("createLogger", () => {
   it("writes one JSON object per line in json mode", () => {
     const lines: string[] = [];
     const log = createLogger("json", (line) => lines.push(line));
-    log.warning({ source: "github", username: "x", message: "boom" });
+    log.warning({ source: "github", subject: "x", message: "boom" });
     log.summary(stats, 10);
 
     const parsed = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -113,7 +118,7 @@ describe("createLogger", () => {
       level: "warn",
       event: "source_warning",
       source: "github",
-      username: "x",
+      subject: "x",
       message: "boom",
     });
     expect(parsed[1]).toMatchObject({ event: "run_summary", csvRows: 4, durationMs: 10 });

@@ -1,4 +1,4 @@
-import type { SourceWarning } from "./adapters/github.js";
+import type { SourceWarning } from "./adapters/warnings.js";
 import type { PipelineStats } from "./pipeline.js";
 
 /**
@@ -38,6 +38,11 @@ function textSummary(stats: PipelineStats, durationMs: number): string {
       `GitHub: ${plural(stats.githubUsernames, "username")}, ${stats.githubUsernamesWithWarnings} with warnings, ${plural(stats.githubCacheHits, "cache hit")}${left}`,
     );
   }
+  if (stats.resumes > 0) {
+    parts.push(
+      `Resumes: ${plural(stats.resumes, "file")}, ${stats.resumesWithWarnings} with warnings, ${plural(stats.resumeLlmCalls, "LLM call")}, ${plural(stats.resumeLlmCacheHits, "cache hit")}, ${plural(stats.resumeValuesDropped, "value")} dropped by grounding`,
+    );
+  }
   parts.push(`${Math.round(durationMs)} ms`);
   return `summary: ${parts.join(" | ")}`;
 }
@@ -56,7 +61,7 @@ export function createLogger(format: LogFormat, write: WriteLine = toStderr): Lo
 
   return {
     note: (message) => write(`note: ${message}`),
-    warning: (w) => write(`warning: ${w.source} "${w.username}": ${w.message}`),
+    warning: (w) => write(`warning: ${w.source} "${w.subject}": ${w.message}`),
     error: (message) => write(`Error: ${message}`),
     summary: (stats, durationMs) => write(textSummary(stats, durationMs)),
   };

@@ -1,0 +1,31 @@
+{
+  "file": "aisha-rahman.pdf",
+  "headline": "Machine Learning Engineer",
+  "skills": [
+    "PyTorch",
+    "Python",
+    "MLOps"
+  ],
+  "experience": [
+    {
+      "company": "Relecloud",
+      "title": "Machine Learning Engineer",
+      "start": "Feb 2021",
+      "end": "Present"
+    },
+    {
+      "company": "Trey Research",
+      "title": "Data Scientist",
+      "start": "Aug 2018",
+      "end": "Jan 2021"
+    }
+  ],
+  "education": [
+    {
+      "institution": "Georgia Institute of Technology",
+      "degree": "M.S.",
+      "field": "Computer Science",
+      "end_year": 2018
+    }
+  ]
+}

@@ -11,7 +11,7 @@ const REQUIRED_COLUMNS = [
   "title",
 ] as const;
 
-type OptionalColumn = "github_username";
+type OptionalColumn = "github_username" | "resume_path";
 
 type CsvRow = Record<(typeof REQUIRED_COLUMNS)[number], string | undefined> &
   Partial<Record<OptionalColumn, string | undefined>>;
@@ -102,6 +102,17 @@ function rowToFacts(row: CsvRow, rowIndex: number): RawFact[] {
       rawValue: githubUsername,
       source: "csv",
       sourceMethod: "csv_column:github_username",
+      rowIndex,
+    });
+  }
+
+  const resumePath = nonEmpty(row.resume_path);
+  if (resumePath !== undefined) {
+    facts.push({
+      field: "resume_path",
+      rawValue: resumePath,
+      source: "csv",
+      sourceMethod: "csv_column:resume_path",
       rowIndex,
     });
   }

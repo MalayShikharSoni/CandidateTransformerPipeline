@@ -1,0 +1,9 @@
+Lucas Ferreira
+QA Engineer
+lucas.ferreira@example.com
+
+Experience
+QA Engineer @ Alpine Ski House, Jan '21 – Mar '23
+Test Analyst @ Humongous Insurance, '18 – '20
+
+Skills: Selenium, Cypress, Java

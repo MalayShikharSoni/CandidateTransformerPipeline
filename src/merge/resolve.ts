@@ -1,16 +1,23 @@
 import type {
   CanonicalCandidate,
+  EducationEntry,
   ExperienceEntry,
   ProvenanceEntry,
   ProvenanceMethod,
   Skill,
 } from "../schemas/canonical.js";
 import { normalizeCountry } from "../normalizers/country.js";
-import type { NormalizedFact } from "../schemas/raw-fact.js";
+import type {
+  NormalizedEducationEntry,
+  NormalizedExperienceEntry,
+} from "../normalizers/entries.js";
+import type { NormalizedFact, SourceName } from "../schemas/raw-fact.js";
 import type { CandidateFactGroup } from "./group.js";
 
-const SOURCE_PRECEDENCE = ["csv", "github"] as const;
-type Source = (typeof SOURCE_PRECEDENCE)[number];
+// Highest precedence first. The recruiter's CSV wins; a resume (written by the
+// candidate) beats a GitHub profile.
+export const SOURCE_PRECEDENCE: readonly SourceName[] = ["csv", "resume", "github"];
+type Source = SourceName;
 
 interface ScalarCandidate {
   source: Source;
@@ -34,12 +41,33 @@ function valuesEqual(a: string, b: string): boolean {
   return normalizeKeyPart(a) === normalizeKeyPart(b);
 }
 
-function sourceBaseScore(source: Source): number {
-  return source === "csv" ? 0.9 : 0.6;
+/** Resume facts the LLM extracted (after the grounding check), as opposed to regex. */
+export function isLlmFact(fact: NormalizedFact): boolean {
+  return fact.sourceMethod.startsWith("resume_llm:");
 }
 
-function factScore(fact: NormalizedFact, source: Source): number {
-  return sourceBaseScore(source) * (fact.normalizationSucceeded ? 1 : 0.5);
+// Base confidence by how a fact was obtained: the recruiter's own CSV, a regex
+// match on a fixed format in the resume, a public profile, or the LLM reading
+// resume layout.
+function factBaseScore(fact: NormalizedFact): number {
+  switch (fact.source) {
+    case "csv":
+      return 0.9;
+    case "resume":
+      return isLlmFact(fact) ? 0.5 : 0.8;
+    case "github":
+      return 0.6;
+  }
+}
+
+export function factScore(fact: NormalizedFact): number {
+  return factBaseScore(fact) * (fact.normalizationSucceeded ? 1 : 0.5);
+}
+
+/** The highest-precedence source in the set. */
+function topSource(sources: Iterable<Source>): Source {
+  const present = new Set(sources);
+  return SOURCE_PRECEDENCE.find((source) => present.has(source)) ?? "csv";
 }
 
 function ranNormalizer(field: string): boolean {
@@ -106,20 +134,44 @@ function scalarProvenanceMethod(
   if (matchKey.startsWith("name+company:")) {
     return "fallback_match";
   }
+  if (isLlmFact(winner.fact)) {
+    return "llm_extracted";
+  }
   return winner.valueMethod;
 }
 
-function sourcesAgreeOnValue(
+function eligibleValues(
   candidates: Partial<Record<Source, ScalarCandidate>>,
+): Array<{ source: Source; value: string }> {
+  const values: Array<{ source: Source; value: string }> = [];
+  for (const source of SOURCE_PRECEDENCE) {
+    const candidate = candidates[source];
+    if (candidate?.eligible === true && candidate.value !== null) {
+      values.push({ source, value: candidate.value });
+    }
+  }
+  return values;
+}
+
+/** true when another source gives the same value as the winner. */
+function otherSourceAgrees(
+  candidates: Partial<Record<Source, ScalarCandidate>>,
+  winner: ScalarCandidate,
 ): boolean {
-  const csv = candidates.csv;
-  const github = candidates.github;
-  return (
-    csv?.eligible === true &&
-    github?.eligible === true &&
-    csv.value !== null &&
-    github.value !== null &&
-    valuesEqual(csv.value, github.value)
+  return eligibleValues(candidates).some(
+    ({ source, value }) =>
+      source !== winner.source && winner.value !== null && valuesEqual(value, winner.value),
+  );
+}
+
+/** true when another source gives a valid value that differs from the winner's. */
+function otherSourceDisagrees(
+  candidates: Partial<Record<Source, ScalarCandidate>>,
+  winner: ScalarCandidate,
+): boolean {
+  return eligibleValues(candidates).some(
+    ({ source, value }) =>
+      source !== winner.source && winner.value !== null && !valuesEqual(value, winner.value),
   );
 }
 
@@ -139,23 +191,14 @@ export function resolveScalarField(
     }
   }
 
-  const csv = candidates.csv;
-  const github = candidates.github;
-  const conflict =
-    csv?.eligible === true &&
-    github?.eligible === true &&
-    csv.value !== null &&
-    github.value !== null &&
-    !valuesEqual(csv.value, github.value);
-
   if (winner === null) {
     return { value: null, provenance: null, confidence: null };
   }
 
+  const conflict = otherSourceDisagrees(candidates, winner);
   const confidence = Math.min(
     1,
-    factScore(winner.fact, winner.source) +
-      (sourcesAgreeOnValue(candidates) ? 0.1 : 0),
+    factScore(winner.fact) + (otherSourceAgrees(candidates, winner) ? 0.1 : 0),
   );
 
   return {
@@ -268,9 +311,13 @@ function arrayProvenanceForFailedNormalization(
 function arrayProvenanceMethod(
   usedNormalization: boolean,
   matchKey: string,
+  fromLlmOnly: boolean,
 ): ProvenanceMethod {
   if (matchKey.startsWith("name+company:")) {
     return "fallback_match";
+  }
+  if (fromLlmOnly) {
+    return "llm_extracted";
   }
   return usedNormalization ? "normalized" : "direct";
 }
@@ -295,7 +342,7 @@ function arrayFieldConfidence(
     const candidate = toScalarCandidate(fact);
     scoresBySource.set(
       fact.source,
-      Math.max(scoresBySource.get(fact.source) ?? 0, factScore(fact, fact.source)),
+      Math.max(scoresBySource.get(fact.source) ?? 0, factScore(fact)),
     );
 
     if (candidate.eligible && candidate.value !== null) {
@@ -315,10 +362,14 @@ function arrayFieldConfidence(
   const maxScore =
     contributingScores.length > 0 ? Math.max(...contributingScores) : 0;
 
-  const csvValues = valuesBySource.get("csv") ?? new Set();
-  const githubValues = valuesBySource.get("github") ?? new Set();
-  const sharedValue = [...csvValues].some((value) =>
-    [...githubValues].some((other) => valuesEqual(value, other)),
+  // +0.1 when two different sources share at least one value.
+  const sources = [...valuesBySource.entries()];
+  const sharedValue = sources.some(([source, values]) =>
+    sources.some(
+      ([otherSource, otherValues]) =>
+        otherSource !== source &&
+        [...values].some((value) => [...otherValues].some((other) => valuesEqual(value, other))),
+    ),
   );
 
   return Math.min(1, maxScore + (sharedValue ? 0.1 : 0));
@@ -327,19 +378,24 @@ function arrayFieldConfidence(
 function experienceFieldConfidence(facts: NormalizedFact[]): number | null {
   const experienceFacts = facts.filter(
     (fact) =>
-      fact.field === "experience.company" || fact.field === "experience.title",
+      fact.field === "experience.company" ||
+      fact.field === "experience.title" ||
+      fact.field === "experience.entry",
   );
 
   let hasEligibleValue = false;
   const scoresBySource = new Map<Source, number>();
 
   for (const fact of experienceFacts) {
-    const candidate = toScalarCandidate(fact);
+    const eligible =
+      fact.field === "experience.entry"
+        ? fact.normalizedValue !== null
+        : toScalarCandidate(fact).eligible;
     scoresBySource.set(
       fact.source,
-      Math.max(scoresBySource.get(fact.source) ?? 0, factScore(fact, fact.source)),
+      Math.max(scoresBySource.get(fact.source) ?? 0, factScore(fact)),
     );
-    if (candidate.eligible) {
+    if (eligible) {
       hasEligibleValue = true;
     }
   }
@@ -367,14 +423,17 @@ export function resolveArrayField(
     };
   }
 
-  const source: Source = contributors.has("csv") ? "csv" : "github";
+  const source = topSource(contributors);
+  const fromLlmOnly = facts
+    .filter((fact) => fact.field === field && fact.source === source)
+    .every(isLlmFact);
 
   return {
     values,
     provenance: {
       field,
       source,
-      method: arrayProvenanceMethod(usedNormalization, matchKey),
+      method: arrayProvenanceMethod(usedNormalization, matchKey, fromLlmOnly),
     },
     confidence: arrayFieldConfidence(facts, field),
   };
@@ -399,7 +458,7 @@ export function resolveSkillEntries(
     const sources = SOURCE_PRECEDENCE.filter((source) =>
       matching.some((fact) => fact.source === source),
     );
-    const bestScore = Math.max(0, ...matching.map((fact) => factScore(fact, fact.source)));
+    const bestScore = Math.max(0, ...matching.map((fact) => factScore(fact)));
     const agreementBonus = sources.length > 1 ? 0.1 : 0;
 
     return {
@@ -414,27 +473,50 @@ function bundleKey(fact: NormalizedFact): string {
   return `${fact.source}:${fact.rowIndex}`;
 }
 
-// experience[] aggregates one entry per source bundle — multiple sources add
-// entries, they don't compete. Unreachable with CSV+GitHub today (only CSV emits
-// experience facts), but kept correct for a future second experience source.
-function experienceProvenanceMethod(
+function sourceProvenanceMethod(
   matchKey: string,
-  usedNormalization: boolean,
+  sourceFacts: NormalizedFact[],
 ): ProvenanceMethod {
   if (matchKey.startsWith("name+company:")) {
     return "fallback_match";
   }
-  return usedNormalization ? "normalized" : "direct";
+  if (sourceFacts.length > 0 && sourceFacts.every(isLlmFact)) {
+    return "llm_extracted";
+  }
+  return "direct";
 }
 
+/** One provenance entry per source that contributed, highest precedence first. */
+function perSourceProvenance(
+  field: string,
+  usedFacts: NormalizedFact[],
+  matchKey: string,
+): ProvenanceEntry[] {
+  return SOURCE_PRECEDENCE.flatMap((source) => {
+    const sourceFacts = usedFacts.filter((fact) => fact.source === source);
+    if (sourceFacts.length === 0) {
+      return [];
+    }
+    return [{ field, source, method: sourceProvenanceMethod(matchKey, sourceFacts) }];
+  });
+}
+
+export interface ResolvedListField<T> {
+  entries: T[];
+  provenance: ProvenanceEntry[];
+  confidence: number | null;
+}
+
+// experience[] is a list, so sources add entries instead of competing:
+// - CSV gives company + title as two facts; each CSV row becomes one entry.
+// - A resume gives whole entries (experience.entry), already date-normalized.
+// A resume entry whose company exactly equals a CSV entry's company (case and
+// spacing aside, no fuzzy matching) is the same job: the CSV company and title
+// win and the resume adds the dates. Every other resume entry is appended.
 export function resolveExperience(
   facts: NormalizedFact[],
   matchKey: string,
-): {
-  entries: ExperienceEntry[];
-  provenance: ProvenanceEntry | null;
-  confidence: number | null;
-} {
+): ResolvedListField<ExperienceEntry> {
   const byBundle = new Map<string, NormalizedFact[]>();
 
   for (const fact of facts) {
@@ -452,7 +534,8 @@ export function resolveExperience(
   }
 
   const entries: ExperienceEntry[] = [];
-  const contributors = new Set<Source>();
+  const bundleEntries: ExperienceEntry[] = [];
+  const usedFacts: NormalizedFact[] = [];
 
   for (const bundleFacts of byBundle.values()) {
     const company = resolveScalarField(bundleFacts, "experience.company", matchKey);
@@ -465,34 +548,162 @@ export function resolveExperience(
       continue;
     }
 
-    const source = bundleFacts[0]?.source;
-    if (source !== undefined) {
-      contributors.add(source);
-    }
-
-    entries.push({
+    const entry: ExperienceEntry = {
       company: companyValue,
       title: titleValue,
       start: null,
       end: null,
       summary: null,
+    };
+    entries.push(entry);
+    bundleEntries.push(entry);
+    usedFacts.push(...bundleFacts);
+  }
+
+  for (const fact of facts) {
+    if (fact.field !== "experience.entry" || fact.normalizedValue === null) {
+      continue;
+    }
+    const job = fact.normalizedValue as NormalizedExperienceEntry;
+    usedFacts.push(fact);
+
+    const jobCompany = job.company;
+    const sameJob =
+      jobCompany === null
+        ? undefined
+        : bundleEntries.find(
+            (entry) =>
+              entry.start === null &&
+              entry.end === null &&
+              valuesEqual(entry.company, jobCompany),
+          );
+
+    if (sameJob !== undefined) {
+      sameJob.start = job.start;
+      sameJob.end = job.end;
+    } else {
+      entries.push({
+        company: job.company ?? "",
+        title: job.title ?? "",
+        start: job.start,
+        end: job.end,
+        summary: null,
+      });
+    }
+  }
+
+  if (entries.length === 0) {
+    return { entries: [], provenance: [], confidence: null };
+  }
+
+  return {
+    entries,
+    provenance: perSourceProvenance("experience", usedFacts, matchKey),
+    confidence: experienceFieldConfidence(facts),
+  };
+}
+
+export function resolveEducation(
+  facts: NormalizedFact[],
+  matchKey: string,
+): ResolvedListField<EducationEntry> {
+  const entries: EducationEntry[] = [];
+  const usedFacts: NormalizedFact[] = [];
+  const seen = new Set<string>();
+
+  for (const fact of facts) {
+    if (fact.field !== "education.entry" || fact.normalizedValue === null) {
+      continue;
+    }
+    const school = fact.normalizedValue as NormalizedEducationEntry;
+    const key = `${normalizeKeyPart(school.institution)}|${normalizeKeyPart(school.degree ?? "")}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    usedFacts.push(fact);
+    entries.push({
+      institution: school.institution,
+      degree: school.degree ?? "",
+      field: school.field ?? "",
+      end_year: school.end_year,
     });
   }
 
   if (entries.length === 0) {
-    return { entries: [], provenance: null, confidence: null };
+    return { entries: [], provenance: [], confidence: null };
   }
-
-  const source: Source = contributors.has("csv") ? "csv" : "github";
 
   return {
     entries,
+    provenance: perSourceProvenance("education", usedFacts, matchKey),
+    confidence: Math.min(1, Math.max(...usedFacts.map(factScore))),
+  };
+}
+
+function monthIndex(yearMonth: string): number {
+  const [year, month] = yearMonth.split("-").map(Number);
+  return year * 12 + (month - 1);
+}
+
+/**
+ * Total time covered by dated jobs, in years (one decimal). Overlapping jobs
+ * count once. An ongoing job ("Present") runs to `asOf` (YYYY-MM), which the
+ * caller passes in so the result does not depend on the clock. A job with a
+ * start but no stated end is left out rather than guessed. Null when no job
+ * has usable dates.
+ */
+export function resolveYearsExperience(
+  facts: NormalizedFact[],
+  asOf: string | undefined,
+): { value: number | null; provenance: ProvenanceEntry | null; confidence: number | null } {
+  const intervals: Array<[number, number]> = [];
+  const usedFacts: NormalizedFact[] = [];
+
+  for (const fact of facts) {
+    if (fact.field !== "experience.entry" || fact.normalizedValue === null) {
+      continue;
+    }
+    const job = fact.normalizedValue as NormalizedExperienceEntry;
+    const end = job.end ?? (job.current ? asOf : undefined);
+    if (job.start === null || end === undefined) {
+      continue;
+    }
+    const startIndex = monthIndex(job.start);
+    const endIndex = monthIndex(end);
+    if (endIndex < startIndex) {
+      continue;
+    }
+    // Both ends are whole months: Jan 2020 - Mar 2020 is 3 months.
+    intervals.push([startIndex, endIndex + 1]);
+    usedFacts.push(fact);
+  }
+
+  if (intervals.length === 0) {
+    return { value: null, provenance: null, confidence: null };
+  }
+
+  intervals.sort((a, b) => a[0] - b[0]);
+  let months = 0;
+  let [currentStart, currentEnd] = intervals[0];
+  for (const [start, end] of intervals.slice(1)) {
+    if (start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, end);
+    } else {
+      months += currentEnd - currentStart;
+      [currentStart, currentEnd] = [start, end];
+    }
+  }
+  months += currentEnd - currentStart;
+
+  return {
+    value: Math.round((months / 12) * 10) / 10,
     provenance: {
-      field: "experience",
-      source,
-      method: experienceProvenanceMethod(matchKey, false),
+      field: "years_experience",
+      source: topSource(usedFacts.map((fact) => fact.source)),
+      method: "derived",
     },
-    confidence: experienceFieldConfidence(facts),
+    confidence: Math.min(...usedFacts.map(factScore)),
   };
 }
 
@@ -550,8 +761,14 @@ function resolveLocation(facts: NormalizedFact[]): {
   return { location, provenance };
 }
 
+/**
+ * @param asOf YYYY-MM month that ongoing jobs run to when computing
+ *   years_experience. Passed in, never read from the clock, so the same facts
+ *   always resolve to the same record.
+ */
 export function resolveCandidateGroup(
   group: CandidateFactGroup,
+  asOf?: string,
 ): CanonicalCandidate {
   const { facts, matchKey, candidateId } = group;
 
@@ -559,10 +776,13 @@ export function resolveCandidateGroup(
   const headline = resolveScalarField(facts, "headline", matchKey);
   const githubLink = resolveScalarField(facts, "links.github", matchKey);
   const portfolioLink = resolveScalarField(facts, "links.portfolio", matchKey);
+  const linkedinLink = resolveScalarField(facts, "links.linkedin", matchKey);
   const emails = resolveArrayField(facts, "emails", matchKey);
   const phones = resolveArrayField(facts, "phones", matchKey);
   const skills = resolveArrayField(facts, "skills", matchKey);
   const experience = resolveExperience(facts, matchKey);
+  const education = resolveEducation(facts, matchKey);
+  const yearsExperience = resolveYearsExperience(facts, asOf);
   const { location, provenance: locationProvenance } = resolveLocation(facts);
 
   const provenance = [
@@ -570,10 +790,13 @@ export function resolveCandidateGroup(
     headline.provenance,
     githubLink.provenance,
     portfolioLink.provenance,
+    linkedinLink.provenance,
     emails.provenance,
     phones.provenance,
     skills.provenance,
-    experience.provenance,
+    ...experience.provenance,
+    ...education.provenance,
+    yearsExperience.provenance,
     locationProvenance,
   ].filter((entry): entry is ProvenanceEntry => entry !== null);
 
@@ -582,10 +805,13 @@ export function resolveCandidateGroup(
     headline.confidence,
     githubLink.confidence,
     portfolioLink.confidence,
+    linkedinLink.confidence,
     emails.confidence,
     phones.confidence,
     skills.confidence,
     experience.confidence,
+    education.confidence,
+    yearsExperience.confidence,
   ]);
 
   return {
@@ -597,16 +823,16 @@ export function resolveCandidateGroup(
     phones: phones.values,
     location,
     links: {
-      linkedin: null,
+      linkedin: linkedinLink.value,
       github: githubLink.value,
       portfolio: portfolioLink.value,
       other: [],
     },
     headline: headline.value,
-    years_experience: null,
+    years_experience: yearsExperience.value,
     skills: resolveSkillEntries(facts, skills.values),
     experience: experience.entries,
-    education: [],
+    education: education.entries,
     provenance,
     overall_confidence,
   };

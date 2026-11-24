@@ -1,0 +1,9 @@
+Marcus Bell — Mobile Developer
+marcus.bell@example.com | +91 98765 43108
+
+Experience
+- iOS Developer, Coho Winery (Apr 2019 – Present)
+- App Developer, Bellworks Studio (Jan 2020 – Dec 2022)
+- Junior Developer, Wingtip Toys (Jan 2017 – Mar 2019)
+
+Skills: Swift, Kotlin, Firebase

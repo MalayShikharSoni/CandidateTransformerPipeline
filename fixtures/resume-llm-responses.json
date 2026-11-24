@@ -1,0 +1,331 @@
+{
+  "note": "HAND-WRITTEN STAND-INS, not real model answers: the answer key plus three deliberate mistakes (an invented skill and job for ananya-iyer, a reworded title for daniel-okafor) for the grounding check to catch. Tests replay this file. Replace it with real answers by running 'npm run eval:resumes -- --record' with ANTHROPIC_API_KEY set.",
+  "responses": {
+    "ananya-iyer.pdf": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Senior Backend Engineer",
+        "skills": [
+          "Go",
+          "Java",
+          "PostgreSQL",
+          "Kafka",
+          "Kubernetes",
+          "Rust"
+        ],
+        "experience": [
+          {
+            "company": "Northwind Labs",
+            "title": "Senior Backend Engineer",
+            "start": "Jan 2022",
+            "end": "Present"
+          },
+          {
+            "company": "Contoso Retail",
+            "title": "Software Engineer",
+            "start": "Jul 2018",
+            "end": "Dec 2021"
+          },
+          {
+            "company": "Globex Corporation",
+            "title": "Intern",
+            "start": "2017",
+            "end": "2017"
+          }
+        ],
+        "education": [
+          {
+            "institution": "Indian Institute of Technology Madras",
+            "degree": "B.Tech",
+            "field": "Computer Science",
+            "end_year": 2018
+          }
+        ]
+      }
+    },
+    "daniel-okafor.pdf": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Full-Stack Developer",
+        "skills": [
+          "Python",
+          "TypeScript",
+          "React",
+          "AWS",
+          "Docker"
+        ],
+        "experience": [
+          {
+            "company": "Fabrikam Health",
+            "title": "Lead Developer",
+            "start": "March 2020",
+            "end": "Present"
+          },
+          {
+            "company": "Tailspin Toys",
+            "title": "Front-end Engineer",
+            "start": "June 2017",
+            "end": "February 2020"
+          }
+        ],
+        "education": [
+          {
+            "institution": "University of Lagos",
+            "degree": "BSc",
+            "field": "Computer Engineering",
+            "end_year": 2017
+          }
+        ]
+      }
+    },
+    "sofia-marin.docx": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Data Analyst",
+        "skills": [
+          "SQL",
+          "Python",
+          "Tableau",
+          "Excel"
+        ],
+        "experience": [
+          {
+            "company": "Woodgrove Bank",
+            "title": "Data Analyst",
+            "start": "03/2021",
+            "end": "Present"
+          },
+          {
+            "company": "Woodgrove Bank",
+            "title": "Analyst Intern",
+            "start": "06/2020",
+            "end": "08/2020"
+          },
+          {
+            "company": "Universidad de Granada",
+            "title": "Research Assistant",
+            "start": "09/2018",
+            "end": "05/2020"
+          }
+        ],
+        "education": [
+          {
+            "institution": "Universidad de Granada",
+            "degree": "MSc",
+            "field": "Statistics",
+            "end_year": 2020
+          },
+          {
+            "institution": "Universidad de Granada",
+            "degree": "BSc",
+            "field": "Mathematics",
+            "end_year": 2018
+          }
+        ]
+      }
+    },
+    "kenji-watanabe.txt": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Site Reliability Engineer",
+        "skills": [
+          "Linux",
+          "Terraform",
+          "Prometheus",
+          "Python"
+        ],
+        "experience": [
+          {
+            "company": "Adventure Works",
+            "title": "Site Reliability Engineer",
+            "start": "2019",
+            "end": "2024"
+          },
+          {
+            "company": "Litware Inc",
+            "title": "Systems Administrator",
+            "start": "2015",
+            "end": "2019"
+          }
+        ],
+        "education": [
+          {
+            "institution": "Tokyo Institute of Technology",
+            "degree": "B.Eng.",
+            "field": "Information Engineering",
+            "end_year": 2015
+          }
+        ]
+      }
+    },
+    "priya-desai.md": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Product Designer",
+        "skills": [
+          "Figma",
+          "User Research",
+          "Prototyping"
+        ],
+        "experience": [
+          {
+            "company": "Margie's Travel",
+            "title": "Product Designer",
+            "start": "Sept 2020",
+            "end": "Present"
+          },
+          {
+            "company": "Proseware",
+            "title": "UX Designer",
+            "start": "Aug 2017",
+            "end": "Aug 2020"
+          }
+        ],
+        "education": [
+          {
+            "institution": "National Institute of Design",
+            "degree": "M.Des",
+            "field": "Interaction Design",
+            "end_year": 2017
+          }
+        ]
+      }
+    },
+    "tomas-novak.pdf": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": null,
+        "skills": [],
+        "experience": [
+          {
+            "company": null,
+            "title": "Freelance Translator",
+            "start": null,
+            "end": null
+          },
+          {
+            "company": "Lucerne Publishing",
+            "title": "Editor",
+            "start": "2014",
+            "end": "2016"
+          }
+        ],
+        "education": [
+          {
+            "institution": "Charles University",
+            "degree": "BA",
+            "field": "English Philology",
+            "end_year": null
+          }
+        ]
+      }
+    },
+    "leila-haddad.docx": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": null,
+        "skills": [],
+        "experience": [
+          {
+            "company": "Blue Yonder Coffee",
+            "title": "Barista",
+            "start": "2023",
+            "end": "Present"
+          }
+        ],
+        "education": []
+      }
+    },
+    "marcus-bell.txt": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Mobile Developer",
+        "skills": [
+          "Swift",
+          "Kotlin",
+          "Firebase"
+        ],
+        "experience": [
+          {
+            "company": "Coho Winery",
+            "title": "iOS Developer",
+            "start": "Apr 2019",
+            "end": "Present"
+          },
+          {
+            "company": "Bellworks Studio",
+            "title": "App Developer",
+            "start": "Jan 2020",
+            "end": "Dec 2022"
+          },
+          {
+            "company": "Wingtip Toys",
+            "title": "Junior Developer",
+            "start": "Jan 2017",
+            "end": "Mar 2019"
+          }
+        ],
+        "education": []
+      }
+    },
+    "aisha-rahman.pdf": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "Machine Learning Engineer",
+        "skills": [
+          "PyTorch",
+          "Python",
+          "MLOps"
+        ],
+        "experience": [
+          {
+            "company": "Relecloud",
+            "title": "Machine Learning Engineer",
+            "start": "Feb 2021",
+            "end": "Present"
+          },
+          {
+            "company": "Trey Research",
+            "title": "Data Scientist",
+            "start": "Aug 2018",
+            "end": "Jan 2021"
+          }
+        ],
+        "education": [
+          {
+            "institution": "Georgia Institute of Technology",
+            "degree": "M.S.",
+            "field": "Computer Science",
+            "end_year": 2018
+          }
+        ]
+      }
+    },
+    "lucas-ferreira.txt": {
+      "model": "hand-written-stand-in",
+      "output": {
+        "headline": "QA Engineer",
+        "skills": [
+          "Selenium",
+          "Cypress",
+          "Java"
+        ],
+        "experience": [
+          {
+            "company": "Alpine Ski House",
+            "title": "QA Engineer",
+            "start": "Jan '21",
+            "end": "Mar '23"
+          },
+          {
+            "company": "Humongous Insurance",
+            "title": "Test Analyst",
+            "start": "'18",
+            "end": "'20"
+          }
+        ],
+        "education": []
+      }
+    }
+  }
+}

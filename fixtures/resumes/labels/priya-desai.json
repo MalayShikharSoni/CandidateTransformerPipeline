@@ -1,0 +1,31 @@
+{
+  "file": "priya-desai.md",
+  "headline": "Product Designer",
+  "skills": [
+    "Figma",
+    "User Research",
+    "Prototyping"
+  ],
+  "experience": [
+    {
+      "company": "Margie's Travel",
+      "title": "Product Designer",
+      "start": "Sept 2020",
+      "end": "Present"
+    },
+    {
+      "company": "Proseware",
+      "title": "UX Designer",
+      "start": "Aug 2017",
+      "end": "Aug 2020"
+    }
+  ],
+  "education": [
+    {
+      "institution": "National Institute of Design",
+      "degree": "M.Des",
+      "field": "Interaction Design",
+      "end_year": 2017
+    }
+  ]
+}

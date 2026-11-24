@@ -1,0 +1,44 @@
+{
+  "file": "sofia-marin.docx",
+  "headline": "Data Analyst",
+  "skills": [
+    "SQL",
+    "Python",
+    "Tableau",
+    "Excel"
+  ],
+  "experience": [
+    {
+      "company": "Woodgrove Bank",
+      "title": "Data Analyst",
+      "start": "03/2021",
+      "end": "Present"
+    },
+    {
+      "company": "Woodgrove Bank",
+      "title": "Analyst Intern",
+      "start": "06/2020",
+      "end": "08/2020"
+    },
+    {
+      "company": "Universidad de Granada",
+      "title": "Research Assistant",
+      "start": "09/2018",
+      "end": "05/2020"
+    }
+  ],
+  "education": [
+    {
+      "institution": "Universidad de Granada",
+      "degree": "MSc",
+      "field": "Statistics",
+      "end_year": 2020
+    },
+    {
+      "institution": "Universidad de Granada",
+      "degree": "BSc",
+      "field": "Mathematics",
+      "end_year": 2018
+    }
+  ]
+}

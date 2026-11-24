@@ -1,11 +1,37 @@
-// No pipeline caller yet — CSV and GitHub adapters do not supply experience dates.
-// Utility for future experience.start / experience.end normalization.
+// Normalizes experience.start / experience.end (from resumes) to YYYY-MM.
+// "Present" / "current" / "now" return null: an open-ended role has no end date.
 
 const YYYY_MM = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const YYYY_MM_DD = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const YYYY_SLASH_MM = /^(\d{4})\/(0[1-9]|1[0-2])$/;
 const MM_SLASH_YYYY = /^(0[1-9]|1[0-2])\/(\d{4})$/;
 const YYYY_ONLY = /^(\d{4})$/;
+// "Jan 2021", "January 2021", "Jan. 2021", "Sept, 2021", "Mar-2021"
+const MONTH_NAME_YYYY = /^([a-z]+)\.?[\s,\-/]*(\d{4})$/;
+
+const MONTHS: Readonly<Record<string, number>> = {
+  jan: 1, january: 1,
+  feb: 2, february: 2,
+  mar: 3, march: 3,
+  apr: 4, april: 4,
+  may: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7,
+  aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12,
+};
+
+/** true for the words resumes use for an ongoing role. */
+export function isPresentWord(rawValue: unknown): boolean {
+  if (typeof rawValue !== "string") {
+    return false;
+  }
+  const lower = rawValue.trim().toLowerCase();
+  return lower === "present" || lower === "current" || lower === "now";
+}
 
 function isValidCalendarDate(year: number, month: number, day: number): boolean {
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -33,9 +59,14 @@ export function normalizeDate(rawValue: unknown): string | null {
     return null;
   }
 
-  const lower = trimmed.toLowerCase();
-  if (lower === "present" || lower === "current" || lower === "now") {
+  if (isPresentWord(trimmed)) {
     return null;
+  }
+
+  const monthName = trimmed.toLowerCase().match(MONTH_NAME_YYYY);
+  if (monthName) {
+    const month = MONTHS[monthName[1]];
+    return month === undefined ? null : toYearMonth(Number(monthName[2]), month);
   }
 
   const yyyyMm = trimmed.match(YYYY_MM);

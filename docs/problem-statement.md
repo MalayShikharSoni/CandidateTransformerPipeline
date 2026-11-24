@@ -28,8 +28,8 @@ sources with conflicting values.
 - Resume files — PDF / DOCX prose.
 - Recruiter notes — free text.
 
-**Used in this project:** recruiter CSV (structured) + GitHub profile (unstructured).
-The design doc explains why.
+**Used in this project:** recruiter CSV (structured) + GitHub profile and resume files
+(unstructured). The design doc explains why.
 
 ## Canonical output schema
 

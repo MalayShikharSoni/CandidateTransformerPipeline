@@ -92,7 +92,7 @@ describe("merge: CSV row linked to a GitHub username", () => {
 
     const candidates = groupFactsByCandidate(
       normalizeFacts([...csvRow, ...secondRow, ...githubForRow1]),
-    ).map(resolveCandidateGroup);
+    ).map((group) => resolveCandidateGroup(group));
 
     expect(candidates.find((c) => c.full_name === "Aditi Rao")?.headline).toBe("Data person");
     expect(candidates.find((c) => c.full_name === "Malay Shikhar Soni")?.headline).toBeNull();
@@ -205,7 +205,7 @@ describe("csv adapter: unusable input is an error, not an empty result", () => {
 describe("default output schema", () => {
   it("includes links, experience and full skill objects, and passes validation", async () => {
     const { facts } = await readCsvFacts("fixtures/recruiter.csv");
-    const [first] = groupFactsByCandidate(normalizeFacts(facts)).map(resolveCandidateGroup);
+    const [first] = groupFactsByCandidate(normalizeFacts(facts)).map((group) => resolveCandidateGroup(group));
 
     const projected = projectCandidate(first, DEFAULT_CONFIG);
     expect(projected).not.toHaveProperty("error");

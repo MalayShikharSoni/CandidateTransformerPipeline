@@ -99,19 +99,19 @@ function provisionalBundles(facts: NormalizedFact[]): NormalizedFact[][] {
   return [...byKey.values()];
 }
 
-function isRowLinked(githubFacts: NormalizedFact[]): boolean {
-  return githubFacts.some((fact) => fact.rowLinked === true);
+function isRowLinked(partnerFacts: NormalizedFact[]): boolean {
+  return partnerFacts.some((fact) => fact.rowLinked === true);
 }
 
 function canUnionCrossSource(
   csvFacts: NormalizedFact[],
-  githubFacts: NormalizedFact[],
+  partnerFacts: NormalizedFact[],
 ): boolean {
-  // The CSV row named this GitHub username itself, so the recruiter has already
-  // said they are the same person. A different display name ("Malay S.") or a
+  // The CSV row named this source itself (github_username or resume_path), so
+  // the recruiter has already said they are the same person. A different display name ("Malay S.") or a
   // second email is a conflict to record in provenance, not a reason to split
   // one person into two records.
-  if (isRowLinked(githubFacts)) {
+  if (isRowLinked(partnerFacts)) {
     return true;
   }
 
@@ -122,17 +122,17 @@ function canUnionCrossSource(
     return false;
   }
 
-  const unionFacts = [...csvFacts, ...githubFacts];
+  const unionFacts = [...csvFacts, ...partnerFacts];
   if (computeMatchKey(unionFacts) !== csvKey) {
     return false;
   }
 
   const csvName = normalizedName(csvFacts);
-  const githubName = normalizedName(githubFacts);
+  const partnerName = normalizedName(partnerFacts);
   if (
     csvName !== undefined &&
-    githubName !== undefined &&
-    csvName !== githubName
+    partnerName !== undefined &&
+    csvName !== partnerName
   ) {
     return false;
   }
@@ -142,38 +142,43 @@ function canUnionCrossSource(
 
 function unionCrossSource(bundles: NormalizedFact[][]): NormalizedFact[][] {
   const csvBundles = bundles.filter((bundle) => bundle[0]?.source === "csv");
-  const githubBundles = bundles.filter((bundle) => bundle[0]?.source === "github");
-  const otherBundles = bundles.filter(
-    (bundle) =>
-      bundle.length > 0 &&
-      bundle[0]?.source !== "csv" &&
-      bundle[0]?.source !== "github",
-  );
 
-  // GitHub facts carry the rowIndex of the CSV row they were fetched for, so
-  // each CSV row has at most one GitHub partner: look it up instead of
-  // comparing every CSV row with every GitHub bundle (O(n) instead of O(n²)).
-  const githubByRow = new Map<number, NormalizedFact[]>();
-  for (const bundle of githubBundles) {
-    githubByRow.set(bundle[0].rowIndex, bundle);
-  }
-
-  const result: NormalizedFact[][] = [...otherBundles];
-
-  for (const csvBundle of csvBundles) {
-    const rowIndex = csvBundle[0].rowIndex;
-    const githubBundle = githubByRow.get(rowIndex);
-
-    if (githubBundle !== undefined && canUnionCrossSource(csvBundle, githubBundle)) {
-      result.push([...csvBundle, ...githubBundle]);
-      githubByRow.delete(rowIndex);
+  // GitHub and resume facts carry the rowIndex of the CSV row they were read
+  // for, so each CSV row has at most one partner bundle per source: look them up
+  // instead of comparing every CSV row with every bundle (O(n) instead of O(n²)).
+  const partnersByRow = new Map<number, NormalizedFact[][]>();
+  for (const bundle of bundles) {
+    if (bundle.length === 0 || bundle[0].source === "csv") {
+      continue;
+    }
+    const partners = partnersByRow.get(bundle[0].rowIndex);
+    if (partners === undefined) {
+      partnersByRow.set(bundle[0].rowIndex, [bundle]);
     } else {
-      result.push(csvBundle);
+      partners.push(bundle);
     }
   }
 
-  // GitHub data that matched no CSV row is still emitted, as its own record.
-  result.push(...githubByRow.values());
+  const result: NormalizedFact[][] = [];
+
+  for (const csvBundle of csvBundles) {
+    const rowIndex = csvBundle[0].rowIndex;
+    const partners = partnersByRow.get(rowIndex) ?? [];
+    const joined = partners.filter((partner) => canUnionCrossSource(csvBundle, partner));
+    const leftover = partners.filter((partner) => !joined.includes(partner));
+
+    result.push([...csvBundle, ...joined.flat()]);
+    if (leftover.length > 0) {
+      partnersByRow.set(rowIndex, leftover);
+    } else {
+      partnersByRow.delete(rowIndex);
+    }
+  }
+
+  // Data that joined no CSV row is still emitted, one record per bundle.
+  for (const partners of partnersByRow.values()) {
+    result.push(...partners);
+  }
 
   return result;
 }
@@ -200,7 +205,7 @@ function candidateIdFromMatchKey(matchKey: string): string {
 }
 
 // The match key (and so candidate_id) comes from the CSV facts when there are
-// any. A merged-in GitHub email therefore can't change the id or make the key
+// any. A merged-in GitHub or resume email therefore can't change the id or make the key
 // ambiguous, and the same CSV row always gets the same id.
 function resolveMatchKey(facts: NormalizedFact[]): string {
   const csvFacts = facts.filter((fact) => fact.source === "csv");

@@ -1,3 +1,10 @@
 # Golden files are compared byte for byte, so keep LF endings on every OS
 # (Windows checkouts would otherwise convert them to CRLF and fail the test).
 tests/golden/** text eol=lf
+
+# Resume fixtures are read as text and hashed for the LLM cache key, so keep
+# their bytes identical on every OS.
+fixtures/resumes/*.txt text eol=lf
+fixtures/resumes/*.md text eol=lf
+fixtures/resumes/*.pdf binary
+fixtures/resumes/*.docx binary

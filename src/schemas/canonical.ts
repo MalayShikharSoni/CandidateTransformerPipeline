@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SourceName } from "./raw-fact.js";
 
 // Provenance method enum — concrete, not vague, so it's defensible in the demo.
 export const ProvenanceMethod = z.enum([
@@ -7,12 +8,14 @@ export const ProvenanceMethod = z.enum([
   "normalization_failed", // fact existed but normalizer returned null
   "precedence_override_conflict", // sources disagreed; higher-precedence source won
   "fallback_match", // candidate was matched via name+company, not email
+  "llm_extracted", // value was pulled from resume text by the LLM and passed the grounding check
+  "derived", // value was computed from other resolved fields (years_experience)
 ]);
 export type ProvenanceMethod = z.infer<typeof ProvenanceMethod>;
 
 export const ProvenanceEntry = z.object({
   field: z.string(),
-  source: z.enum(["csv", "github"]),
+  source: SourceName,
   method: ProvenanceMethod,
 });
 export type ProvenanceEntry = z.infer<typeof ProvenanceEntry>;
@@ -20,7 +23,7 @@ export type ProvenanceEntry = z.infer<typeof ProvenanceEntry>;
 export const Skill = z.object({
   name: z.string(), // canonical skill name
   confidence: z.number().min(0).max(1),
-  sources: z.array(z.enum(["csv", "github"])),
+  sources: z.array(SourceName),
 });
 export type Skill = z.infer<typeof Skill>;
 

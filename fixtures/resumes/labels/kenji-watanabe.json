@@ -1,0 +1,32 @@
+{
+  "file": "kenji-watanabe.txt",
+  "headline": "Site Reliability Engineer",
+  "skills": [
+    "Linux",
+    "Terraform",
+    "Prometheus",
+    "Python"
+  ],
+  "experience": [
+    {
+      "company": "Adventure Works",
+      "title": "Site Reliability Engineer",
+      "start": "2019",
+      "end": "2024"
+    },
+    {
+      "company": "Litware Inc",
+      "title": "Systems Administrator",
+      "start": "2015",
+      "end": "2019"
+    }
+  ],
+  "education": [
+    {
+      "institution": "Tokyo Institute of Technology",
+      "degree": "B.Eng.",
+      "field": "Information Engineering",
+      "end_year": 2015
+    }
+  ]
+}

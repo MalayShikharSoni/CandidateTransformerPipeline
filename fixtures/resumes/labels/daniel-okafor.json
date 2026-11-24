@@ -1,0 +1,33 @@
+{
+  "file": "daniel-okafor.pdf",
+  "headline": "Full-Stack Developer",
+  "skills": [
+    "Python",
+    "TypeScript",
+    "React",
+    "AWS",
+    "Docker"
+  ],
+  "experience": [
+    {
+      "company": "Fabrikam Health",
+      "title": "Lead Developer",
+      "start": "March 2020",
+      "end": "Present"
+    },
+    {
+      "company": "Tailspin Toys",
+      "title": "Frontend Developer",
+      "start": "June 2017",
+      "end": "February 2020"
+    }
+  ],
+  "education": [
+    {
+      "institution": "University of Lagos",
+      "degree": "BSc",
+      "field": "Computer Engineering",
+      "end_year": 2017
+    }
+  ]
+}

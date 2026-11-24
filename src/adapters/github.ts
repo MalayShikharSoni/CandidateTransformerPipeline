@@ -1,17 +1,13 @@
 import type { RawFact } from "../schemas/raw-fact.js";
 import type { CachedResponse, ResponseCache } from "./github-cache.js";
+import type { SourceWarning } from "./warnings.js";
+
+export type { SourceWarning } from "./warnings.js";
 
 const GITHUB_USER_API = "https://api.github.com/users";
 
 /** Longest we will pause for a rate-limit retry. Longer waits are reported, not waited out. */
 const MAX_RETRY_WAIT_MS = 60_000;
-
-/** Something went wrong with a source, but the run carried on without it. */
-export interface SourceWarning {
-  source: "github";
-  username: string;
-  message: string;
-}
 
 export interface GitHubAdapterResult {
   facts: RawFact[];
@@ -319,7 +315,7 @@ export async function readGitHubFacts(
   const userUrl = `${GITHUB_USER_API}/${encodeURIComponent(trimmedUsername)}`;
   const warn = (message: string): SourceWarning => ({
     source: "github",
-    username: trimmedUsername,
+    subject: trimmedUsername,
     message,
   });
 

@@ -1,0 +1,13 @@
+KENJI WATANABE
+Site Reliability Engineer
+kenji.w@example.com
++91 98765 43104
+
+EXPERIENCE
+Adventure Works, Site Reliability Engineer, 2019 - 2024
+Litware Inc, Systems Administrator, 2015 - 2019
+
+EDUCATION
+Tokyo Institute of Technology, B.Eng. Information Engineering, 2015
+
+SKILLS: Linux, Terraform, Prometheus, Python

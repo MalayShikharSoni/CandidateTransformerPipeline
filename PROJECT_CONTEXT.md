@@ -6,30 +6,36 @@ the deviation and asking first.
 
 ## What this is
 
-A CLI tool that ingests candidate data from two sources, merges it into one canonical
+A CLI tool that ingests candidate data from three sources, merges it into one canonical
 profile per candidate, and projects it into a configurable output shape. Full spec
 lives in `docs/problem-statement.md`. Design rationale lives in `docs/design-doc.md`
-(also `docs/design-doc.pdf`), which reflects already-finalized decisions; this file
+(`docs/design-doc.pdf` is the original two-source version and predates the resume
+source), which reflects already-finalized decisions; this file
 operationalizes it for implementation.
 
 ## Stack (fixed — do not suggest alternatives)
 
 - Node.js + TypeScript only. No Python, no second language, no exceptions.
 - Libraries: `zod` (schema validation), `vitest` (testing), `csv-parse` (CSV),
-  `libphonenumber-js` (phone normalization), native `fetch` (GitHub API calls — no axios needed).
+  `libphonenumber-js` (phone normalization), native `fetch` (GitHub API calls — no axios needed),
+  `unpdf` / `mammoth` (resume text), `@anthropic-ai/sdk` (the one LLM call, see below).
 - No frameworks. No Express/Nest (this is a CLI, not a server). No LangChain,
-  no Hugging Face, no LLM calls anywhere in the pipeline. No ORM, no database —
-  everything is in-memory for the scope of a CLI run.
+  no Hugging Face. Exactly one LLM call site: resume extraction (rules below).
+  No ORM, no database — everything is in-memory for the scope of a CLI run.
 - Package manager: npm.
 
-## Sources (fixed — exactly these two, nothing more for the primary build)
+## Sources (exactly these three)
 
-1. **Recruiter CSV** (structured) — columns: name, email, phone, current_company, title.
+1. **Recruiter CSV** (structured) — columns: name, email, phone, current_company, title;
+   optional `github_username` and `resume_path` link the row to the other two sources.
 2. **GitHub profile** (unstructured, via REST API: `https://api.github.com/users/{username}`) —
    fields used: name, bio, html_url, login, public repo languages (for weak skill signal).
+3. **Resume** (unstructured; PDF, DOCX, TXT or MD named by `resume_path`) — regex for
+   fixed-format values (emails, phones, LinkedIn/GitHub/portfolio URLs); with `--llm`,
+   one Claude call per resume for layout-dependent values (jobs, degrees, headline,
+   skills), behind the grounding check.
 
-Do NOT implement LinkedIn, resume parsing, or ATS JSON unless explicitly asked later.
-These are documented as descoped in the design doc.
+LinkedIn and ATS JSON stay descoped (see the design doc).
 
 ## Pipeline (fixed stage order — do not reorder or merge stages)
 
@@ -60,8 +66,8 @@ No stage should reach into another stage's internals.
   one wins but the conflict is recorded in provenance as
   `method: "precedence_override_conflict"`.
 - **confidence**: per-field score, computed independently of which value won.
-  Concrete weights: CSV base 0.9, GitHub-derived base 0.6. +0.1 if a second source
-  agrees on the same value. ×0.5 multiplier if normalization failed for that fact.
+  Concrete weights: CSV base 0.9, resume regex 0.8, GitHub-derived 0.6, resume LLM 0.5.
+  +0.1 if a second source agrees on the same value. ×0.5 multiplier if normalization failed for that fact.
   Clamp to [0, 1]. `overall_confidence` = average of populated field confidences.
 - **project**: apply the runtime config to the canonical record. Config shape:
   `{ fields: [{ path, from, type, required?, normalize? }], include_confidence: bool,
@@ -84,19 +90,23 @@ phones: string[]              // E.164
 location: { city, region, country }   // country = ISO-3166 alpha-2
 links: { linkedin, github, portfolio, other: string[] }
 headline: string | null
-years_experience: number | null   // ALWAYS null with CSV+GitHub — document this, don't fabricate
+years_experience: number | null   // derived from dated resume jobs; null without them, never guessed
 skills: { name, confidence, sources: string[] }[]
 experience: { company, title, start, end, summary }[]   // dates as YYYY-MM
-education: []              // ALWAYS empty with CSV+GitHub — document this, don't fabricate
+education: { institution, degree, field, end_year }[]   // from resumes only; empty otherwise
 provenance: { field, source, method }[]
 overall_confidence: number
 ```
 
 ## Things explicitly rejected — do not reintroduce these
 
-- No LLM/agent-based extraction or matching anywhere. This was a deliberate decision,
-  not an oversight. If you (the AI assistant) think an LLM call would help with skill
-  extraction, name matching, or anything else — don't. Flag it in conversation instead.
+- LLM use is limited to ONE place: reading jobs, degrees, headline and skills out of
+  resume text (`src/adapters/resume-llm.ts`). It is opt-in (`--llm`), cached by content
+  hash, and every value it returns must pass the grounding check
+  (`src/adapters/resume-grounding.ts`) before it becomes a fact. Never use an LLM for
+  matching, normalization, confidence, projection or validation, and never let LLM
+  facts outrank CSV facts. If you think an LLM call would help anywhere else, flag it
+  in conversation instead.
 - No fuzzy/probabilistic entity resolution. Deterministic matching only.
 - No premature abstraction: no plugin/adapter registry system for hypothetical future
   sources, no formal dependency injection framework, no microservice-style separation.
@@ -107,7 +117,11 @@ overall_confidence: number
   single validation pass on the final projected output is sufficient and was a
   deliberate scope decision.
 
-## Testing (5 tests, mapped to design-doc edge cases — not more, not fewer by default)
+## Testing
+
+The five design-doc edge cases below each have a test in `tests/pipeline.test.ts`; the
+rest of the suite (golden outputs, merge, normalizers, projection, cache, resumes) is
+listed in the README. No test calls the GitHub or Anthropic API.
 
 1. Missing source entirely (GitHub 404 / blank URL) — pipeline continues, doesn't crash.
 2. Conflicting non-null values across sources — resolved by precedence, conflict flagged.

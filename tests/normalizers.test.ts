@@ -37,11 +37,17 @@ describe("normalizeDate", () => {
     ["03/2024", "2024-03"],
     ["2024", "2024-01"],
     ["2024-03-15T10:00:00Z", "2024-03"],
+    ["March 2024", "2024-03"],
+    ["Jan 2021", "2021-01"],
+    ["Jan. 2021", "2021-01"],
+    ["Sept 2019", "2019-09"],
+    ["dec, 2018", "2018-12"],
+    ["Mar-2020", "2020-03"],
   ])("%s -> %s", (input, expected) => {
     expect(normalizeDate(input)).toBe(expected);
   });
 
-  it.each(["2024-13", "2023-02-30", "present", "Current", "March 2024", "", 2024])(
+  it.each(["2024-13", "2023-02-30", "present", "Current", "Smarch 2024", "Jan '21", "", 2024])(
     "returns null for %j",
     (input) => {
       expect(normalizeDate(input)).toBeNull();

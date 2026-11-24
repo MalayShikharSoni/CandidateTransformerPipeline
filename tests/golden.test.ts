@@ -64,6 +64,11 @@ describe("golden output on fixtures/recruiter.csv", () => {
       githubUsernamesWithWarnings: 0,
       githubCacheHits: 0,
       githubRateLimitRemaining: null,
+      resumes: 0,
+      resumesWithWarnings: 0,
+      resumeLlmCalls: 0,
+      resumeLlmCacheHits: 0,
+      resumeValuesDropped: 0,
       candidates: 4,
       candidateErrors: 0,
     });

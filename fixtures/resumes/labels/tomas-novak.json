@@ -1,0 +1,27 @@
+{
+  "file": "tomas-novak.pdf",
+  "headline": null,
+  "skills": [],
+  "experience": [
+    {
+      "company": null,
+      "title": "Freelance Translator",
+      "start": null,
+      "end": null
+    },
+    {
+      "company": "Lucerne Publishing",
+      "title": "Editor",
+      "start": "2014",
+      "end": "2016"
+    }
+  ],
+  "education": [
+    {
+      "institution": "Charles University",
+      "degree": "BA",
+      "field": "English Philology",
+      "end_year": null
+    }
+  ]
+}

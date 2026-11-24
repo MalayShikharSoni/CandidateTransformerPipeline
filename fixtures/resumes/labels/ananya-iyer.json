@@ -1,0 +1,33 @@
+{
+  "file": "ananya-iyer.pdf",
+  "headline": "Senior Backend Engineer",
+  "skills": [
+    "Go",
+    "Java",
+    "PostgreSQL",
+    "Kafka",
+    "Kubernetes"
+  ],
+  "experience": [
+    {
+      "company": "Northwind Labs",
+      "title": "Senior Backend Engineer",
+      "start": "Jan 2022",
+      "end": "Present"
+    },
+    {
+      "company": "Contoso Retail",
+      "title": "Software Engineer",
+      "start": "Jul 2018",
+      "end": "Dec 2021"
+    }
+  ],
+  "education": [
+    {
+      "institution": "Indian Institute of Technology Madras",
+      "degree": "B.Tech",
+      "field": "Computer Science",
+      "end_year": 2018
+    }
+  ]
+}

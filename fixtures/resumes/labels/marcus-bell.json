@@ -1,0 +1,30 @@
+{
+  "file": "marcus-bell.txt",
+  "headline": "Mobile Developer",
+  "skills": [
+    "Swift",
+    "Kotlin",
+    "Firebase"
+  ],
+  "experience": [
+    {
+      "company": "Coho Winery",
+      "title": "iOS Developer",
+      "start": "Apr 2019",
+      "end": "Present"
+    },
+    {
+      "company": "Bellworks Studio",
+      "title": "App Developer",
+      "start": "Jan 2020",
+      "end": "Dec 2022"
+    },
+    {
+      "company": "Wingtip Toys",
+      "title": "Junior Developer",
+      "start": "Jan 2017",
+      "end": "Mar 2019"
+    }
+  ],
+  "education": []
+}

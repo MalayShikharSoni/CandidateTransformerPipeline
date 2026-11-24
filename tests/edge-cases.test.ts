@@ -67,7 +67,7 @@ describe("runPipeline", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.stats.candidateErrors).toBe(2);
-      expect(result.warnings.map((w) => w.username)).toEqual(["amy", "zed"]);
+      expect(result.warnings.map((w) => w.subject)).toEqual(["amy", "zed"]);
     }
   });
 });
@@ -218,6 +218,11 @@ describe("logger edge cases", () => {
     githubUsernamesWithWarnings: 0,
     githubCacheHits: 0,
     githubRateLimitRemaining: null,
+    resumes: 0,
+    resumesWithWarnings: 0,
+    resumeLlmCalls: 0,
+    resumeLlmCacheHits: 0,
+    resumeValuesDropped: 0,
     candidates: 1,
     candidateErrors: 0,
   };

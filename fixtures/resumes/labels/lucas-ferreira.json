@@ -1,0 +1,24 @@
+{
+  "file": "lucas-ferreira.txt",
+  "headline": "QA Engineer",
+  "skills": [
+    "Selenium",
+    "Cypress",
+    "Java"
+  ],
+  "experience": [
+    {
+      "company": "Alpine Ski House",
+      "title": "QA Engineer",
+      "start": "Jan '21",
+      "end": "Mar '23"
+    },
+    {
+      "company": "Humongous Insurance",
+      "title": "Test Analyst",
+      "start": "'18",
+      "end": "'20"
+    }
+  ],
+  "education": []
+}
